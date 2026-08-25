@@ -3,6 +3,7 @@ import { Crumbs, DashBar, Page } from "@/components/dash/ui";
 import { NewJobWizard } from "@/components/dash/new-job-wizard";
 import { creditsLabel } from "@/lib/credits";
 import { loadCreditBalance } from "@/lib/credits-server";
+import { EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import { loadDealOptions } from "@/lib/editing-server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -11,7 +12,8 @@ export const dynamic = "force-dynamic";
 export default async function NewEditJobPage() {
   const [deals, balance, supabase] = await Promise.all([
     loadDealOptions(),
-    loadCreditBalance(),
+    // nothing to spend with the market off, so nothing to read.
+    EDITOR_MARKET_ENABLED ? loadCreditBalance() : Promise.resolve(0),
     createClient(),
   ]);
 
@@ -31,12 +33,14 @@ export default async function NewEditJobPage() {
           />
         }
         right={
-          <Link
-            href="/editing/credits"
-            className="flex h-9 shrink-0 items-center rounded-pill border border-line px-5 text-[14px] font-semibold text-ink-70 transition-colors hover:text-ink"
-          >
-            {creditsLabel(balance)}
-          </Link>
+          EDITOR_MARKET_ENABLED ? (
+            <Link
+              href="/editing/credits"
+              className="flex h-9 shrink-0 items-center rounded-pill border border-line px-5 text-[14px] font-semibold text-ink-70 transition-colors hover:text-ink"
+            >
+              {creditsLabel(balance)}
+            </Link>
+          ) : null
         }
       />
 

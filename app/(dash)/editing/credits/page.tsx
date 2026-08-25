@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Crumbs, DashBar, Page, Panel, Pill, Row, Stat } from "@/components/dash/ui";
 import { CreditsShop } from "@/components/dash/credits-shop";
 import { creditsLabel, LEDGER_LABEL } from "@/lib/credits";
+import { EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import { loadCreditBalance, loadCreditLedger } from "@/lib/credits-server";
 import { ago } from "@/lib/money";
 
@@ -13,6 +15,10 @@ export default async function CreditsPage({
 }: {
   searchParams: Promise<{ paid?: string }>;
 }) {
+  // the wallet only means something while jobs are bought off a board. with the
+  // market off, posting is free and there is nothing to top up.
+  if (!EDITOR_MARKET_ENABLED) notFound();
+
   const [{ paid }, balance, ledger] = await Promise.all([
     searchParams,
     loadCreditBalance(),

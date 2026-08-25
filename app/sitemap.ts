@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { createClient as createAnonClient } from "@supabase/supabase-js";
-import { EDITING_ENABLED, EDITOR_HIRING_ENABLED } from "@/lib/editing";
+import { EDITOR_HIRING_ENABLED, EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import { absoluteUrl } from "@/lib/site-url";
 
 /**
@@ -68,7 +68,7 @@ async function portfolioUrls(): Promise<MetadataRoute.Sitemap> {
 async function editorUrls(): Promise<MetadataRoute.Sitemap> {
   // the same gate the /e/<handle> route applies: with both flags off the page
   // 404s, so listing it would only hand google a dead url.
-  if (!EDITING_ENABLED && !EDITOR_HIRING_ENABLED) return [];
+  if (!EDITOR_MARKET_ENABLED && !EDITOR_HIRING_ENABLED) return [];
   const supabase = anon();
   if (!supabase) return [];
   try {

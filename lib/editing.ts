@@ -32,7 +32,29 @@ export const EDITING_ENABLED = true;
  * pages stay behind their own flag and each one checks for itself now, because
  * the group's layout no longer does it for them.
  */
-export const EDITOR_HIRING_ENABLED = true;
+/**
+ * Off on creator empire, 2026-08-25, with the market. Nobody applies to edit
+ * HERE: a student brings their own editor and hands them a link. With both this
+ * and EDITOR_MARKET_ENABLED false the whole /editors tree and /e/<handle> 404.
+ */
+export const EDITOR_HIRING_ENABLED = false;
+
+/**
+ * The two-sided market: the board, claiming, credits, payouts, the editor
+ * dashboards under /editors.
+ *
+ * Off on creator empire, 2026-08-25. A student here already has an editor and
+ * that person will never hold a login on this deploy, so a job does not go on a
+ * board — it mints a handoff link (lib/editing-handoff.ts) and the whole batch
+ * lands on one page the editor can read and download. Delivery comes back
+ * manually and the creator files it.
+ *
+ * A const rather than an env var, same as the two above: it is a product
+ * decision, not a per-deploy one, and the dead branches drop out of the bundle.
+ * The marketplace code is kept rather than deleted so a screen changing on ugc
+ * flows still copies over cleanly.
+ */
+export const EDITOR_MARKET_ENABLED = false;
 
 export type EditorStatus = "active" | "paused";
 

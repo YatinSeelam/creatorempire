@@ -29,6 +29,8 @@ import {
 import { brandLogo } from "@/lib/brand-catalog";
 import type { ReviewLink, ReviewNote } from "@/lib/editing-review";
 import { loadReviewLink, loadReviewNotes } from "@/lib/editing-review-server";
+import type { HandoffLink } from "@/lib/editing-handoff";
+import { loadHandoffLink } from "@/lib/editing-handoff-server";
 import { createClient } from "@/lib/supabase/server";
 import { dealScope } from "@/lib/workspace";
 
@@ -158,6 +160,8 @@ export type EditJobDetail = {
   dealLabel: string | null;
   /** the client review link, null until the creator makes one. */
   reviewLink: ReviewLink | null;
+  /** the editor handoff link, null until the creator makes one. */
+  handoffLink: HandoffLink | null;
   /** what the client said on it, newest first. */
   clientNotes: ReviewNote[];
 };
@@ -191,6 +195,7 @@ export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
     reviewLink,
     clientNotes,
     dealAssets,
+    handoffLink,
   ] = await Promise.all([
     supabase
       .from("edit_job_deliverables")
@@ -222,6 +227,7 @@ export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
     loadReviewLink(supabase, id),
     loadReviewNotes(supabase, id),
     loadDealAssets(supabase, job.deal_id),
+    loadHandoffLink(supabase, id),
   ]);
 
   const payoutRow = ((payouts.data ?? []) as Record<string, unknown>[])[0];
@@ -250,6 +256,7 @@ export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
     dealLabel: dealRow ? (dealRow.brand ? `${dealRow.brand.name} · ${dealRow.name}` : dealRow.name) : null,
     reviewLink,
     clientNotes,
+    handoffLink,
   };
 }
 

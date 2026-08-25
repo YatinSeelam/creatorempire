@@ -32,6 +32,7 @@ import {
   type JobTier,
   type VideoKind,
 } from "@/lib/credits";
+import { EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import type { LinkItem } from "@/lib/editing";
 
 const empty: EditingState = {};
@@ -231,7 +232,9 @@ export function NewJobWizard({
   const tier = tierForKind(kind);
   const credits = jobCredits(tier, rush, videos);
   const perVideo = tier + (rush ? 1 : 0);
-  const short = balance < credits;
+  // free with the market off: there is no board, no editor being hired through
+  // us, and nothing to pay for. the wallet is never read and never short.
+  const short = EDITOR_MARKET_ENABLED && balance < credits;
   const dealLabel = deals.find((d) => d.id === dealId)?.label ?? "no deal yet";
 
   return (
@@ -326,7 +329,7 @@ export function NewJobWizard({
                       onClick={() => setKind(k.value)}
                     >
                       {k.label}
-                      <Sub>${k.tier}</Sub>
+                      {EDITOR_MARKET_ENABLED && <Sub>${k.tier}</Sub>}
                     </Choice>
                   ))}
                 </Toggle>
@@ -340,7 +343,7 @@ export function NewJobWizard({
                   </Choice>
                   <Choice on={rush} onClick={() => setRush(true)}>
                     {turnaroundShort(true)}
-                    <Sub>+1</Sub>
+                    {EDITOR_MARKET_ENABLED && <Sub>+1</Sub>}
                   </Choice>
                 </Toggle>
                 {/* the checkbox is gone, so post the value the action reads. */}
@@ -628,7 +631,11 @@ export function NewJobWizard({
         <div className={step === 2 ? "flex flex-col gap-5" : "hidden"}>
           <Panel
             title="review"
-            hint="cancel before an editor claims it and the credits come back."
+            hint={
+              EDITOR_MARKET_ENABLED
+                ? "cancel before an editor claims it and the credits come back."
+                : "post it, then send your editor the link. nothing is charged."
+            }
           >
             <dl className="divide-y divide-line">
               <Line label="brand deal" value={dealLabel} />
@@ -990,6 +997,7 @@ function Summary({
           </SumLine>
         </ul>
 
+        {EDITOR_MARKET_ENABLED && (
         <div className="mt-5 border-t border-line pt-4">
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[15px] font-extrabold tracking-[-0.01em]">total</span>
@@ -1012,6 +1020,7 @@ function Summary({
             </span>
           </p>
         </div>
+        )}
 
         {short && (
           <p className="mt-3 rounded-xl bg-ember px-3.5 py-2.5 text-[12.5px] leading-[1.5] text-flame-dark">

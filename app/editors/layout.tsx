@@ -6,7 +6,7 @@ import { Mark } from "@/components/art";
 import { column } from "@/components/dash/ui";
 import { EditorSideNav } from "@/components/editors/side-nav";
 import { brand } from "@/lib/content";
-import { EDITING_ENABLED, EDITOR_HIRING_ENABLED } from "@/lib/editing";
+import { EDITOR_HIRING_ENABLED, EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import { loadNotifications } from "@/lib/notify-server";
 import { createClient } from "@/lib/supabase/server";
 import { toViewer } from "@/lib/viewer";
@@ -41,7 +41,10 @@ export default async function EditorsLayout({
 
   // both halves off means the group is not there at all. before the session
   // read on purpose: a hidden feature must not touch auth to 404.
-  if (!EDITING_ENABLED && !EDITOR_HIRING_ENABLED) notFound();
+  // EDITING_ENABLED is the CREATOR's half and stays on here; this group is the
+  // editor's, so it is the market and hiring flags that decide it. both off
+  // means the tree is not there at all.
+  if (!EDITOR_MARKET_ENABLED && !EDITOR_HIRING_ENABLED) notFound();
 
   const supabase = await createClient();
   const {
@@ -104,7 +107,7 @@ export default async function EditorsLayout({
       <EditorSideNav
         viewer={toViewer(user)}
         publicHref={publicHref}
-        marketOpen={EDITING_ENABLED || isFounder === true}
+        marketOpen={EDITOR_MARKET_ENABLED || isFounder === true}
         notifications={bell.rows}
         unreadNotifications={bell.unread}
       />

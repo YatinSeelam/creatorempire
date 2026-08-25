@@ -4,12 +4,14 @@ import { Crumbs, DashBar, FoldPanel, Page, Panel, Pill } from "@/components/dash
 import { Submit } from "@/components/dash/form";
 import {
   CommentForm,
+  DeliveredCutUploader,
   EditJobForm,
   JobAssetUploader,
   RevisionForm,
 } from "@/components/dash/editing-forms";
 import { BrandMark } from "@/components/dash/brand-mark";
 import { ClientNoteRow, ReviewLinkBox } from "@/components/dash/client-review";
+import { HandoffLinkBox } from "@/components/dash/handoff-link";
 import { CutPlayer, type PlayerCut } from "@/components/dash/cut-player";
 import { JobConversation } from "@/components/dash/job-conversation";
 import { JobStepper, type Step } from "@/components/dash/job-stepper";
@@ -21,6 +23,7 @@ import { creditsLabel, turnaroundShort, TIER_LABEL } from "@/lib/credits";
 import { fileFamily, humanSize, isImageFile } from "@/lib/editing-files";
 import {
   bundleLabel,
+  EDITOR_MARKET_ENABLED,
   JOB_STATUS_LABEL,
   jobTotalCents,
   payLabel,
@@ -28,6 +31,7 @@ import {
   type LinkItem,
 } from "@/lib/editing";
 import { reviewerName, VERDICT_LABEL, VERDICT_TONE } from "@/lib/editing-review";
+import { linkIsLive } from "@/lib/editing-handoff";
 import { loadDealOptions, loadEditJob } from "@/lib/editing-server";
 import { ago, money, shortDate } from "@/lib/money";
 
@@ -111,6 +115,7 @@ export default async function EditJobPage({
     dealLabel,
     reviewLink,
     clientNotes,
+    handoffLink,
   } = detail;
   const open = job.status === "open";
   const cancelled = job.status === "cancelled";
@@ -131,7 +136,13 @@ export default async function EditJobPage({
   const messageCount = events.filter((e) => e.kind === "comment").length;
 
   // ------------------------------------------------------------- the stepper
-  const claimed = Boolean(job.claimed_at);
+  //
+  // two spines, one shape. with the market on, a job waits for an editor to
+  // claim it and the editor delivers. with it off there is no board: the second
+  // step is the creator sending the handoff link to the editor they already
+  // have, and the third is the creator filing what came back.
+  const handedOff = Boolean(handoffLink && linkIsLive(handoffLink));
+  const claimed = EDITOR_MARKET_ENABLED ? Boolean(job.claimed_at) : handedOff;
   // a job sitting in `revisions` HAS a cut, but the cut is not the state of
   // play — it went back. so that step un-completes rather than the next one
   // lighting up and asking for a call nobody can make yet.
@@ -140,26 +151,44 @@ export default async function EditJobPage({
   const done = [true, claimed, delivered, approved];
   const active = done.indexOf(false);
 
-  const stepLabels = [
-    "Brief posted",
-    claimed ? "Editor on it" : "Waiting for an editor",
-    job.status === "revisions" ? "Changes with editor" : "Cut delivered",
-    approved ? "Approved" : "Your call",
-  ];
-  const stepNotes = [
-    shortDate(job.created_at),
-    claimed ? editorName : "open on the board",
-    delivered
-      ? `${deliverables.length} cut${deliverables.length === 1 ? "" : "s"}`
-      : job.sla_at
-        ? `due ${shortDate(job.sla_at)}`
-        : `${turnaroundShort(job.is_rush)} once claimed`,
-    approved
-      ? shortDate(job.approved_at as string)
-      : payout
-        ? `${money(payout.amount_cents)} ${payout.status}`
-        : "pay locks here",
-  ];
+  const stepLabels = EDITOR_MARKET_ENABLED
+    ? [
+        "Brief posted",
+        claimed ? "Editor on it" : "Waiting for an editor",
+        job.status === "revisions" ? "Changes with editor" : "Cut delivered",
+        approved ? "Approved" : "Your call",
+      ]
+    : [
+        "Brief posted",
+        handedOff ? "Handed over" : "Send it to your editor",
+        delivered ? "Cut filed" : "Waiting on the cut",
+        approved ? "Approved" : "Your call",
+      ];
+  const stepNotes = EDITOR_MARKET_ENABLED
+    ? [
+        shortDate(job.created_at),
+        claimed ? editorName : "open on the board",
+        delivered
+          ? `${deliverables.length} cut${deliverables.length === 1 ? "" : "s"}`
+          : job.sla_at
+            ? `due ${shortDate(job.sla_at)}`
+            : `${turnaroundShort(job.is_rush)} once claimed`,
+        approved
+          ? shortDate(job.approved_at as string)
+          : payout
+            ? `${money(payout.amount_cents)} ${payout.status}`
+            : "pay locks here",
+      ]
+    : [
+        shortDate(job.created_at),
+        handedOff
+          ? (handoffLink?.label ?? "link is live")
+          : "one link, everything on it",
+        delivered
+          ? `${deliverables.length} cut${deliverables.length === 1 ? "" : "s"} filed`
+          : "upload it when it lands",
+        approved ? shortDate(job.approved_at as string) : "mark it done",
+      ];
   const steps: Step[] = stepLabels.map((label, i) => ({
     label,
     // a cancelled job is not mid-flight, so nothing on it is "now".
@@ -225,12 +254,37 @@ export default async function EditJobPage({
             ) : (
               <Panel title="The cut">
                 <p className="py-6 text-center text-[13.5px] text-ink-50">
-                  {open
-                    ? "Nothing back yet. This is on the board, first editor to claim it starts cutting."
-                    : cancelled
+                  {!EDITOR_MARKET_ENABLED
+                    ? cancelled
                       ? "This job was cancelled. Nothing came back."
-                      : `Nothing back yet. ${editorName} has it, cuts land here versioned.`}
+                      : handedOff
+                        ? "Nothing filed yet. When your editor sends the cut back, drop it in below."
+                        : "Nothing filed yet. Send the handoff link to your editor to start."
+                    : open
+                      ? "Nothing back yet. This is on the board, first editor to claim it starts cutting."
+                      : cancelled
+                        ? "This job was cancelled. Nothing came back."
+                        : `Nothing back yet. ${editorName} has it, cuts land here versioned.`}
                 </p>
+              </Panel>
+            )}
+
+            {/* the manual delivery. the editor on the other end of a handoff
+                link has no login, so the cut comes back over whatever chat they
+                already use and this is where it gets filed. every drop is a new
+                version, so v2 goes through the same box. */}
+            {!EDITOR_MARKET_ENABLED && !cancelled && !approved && (
+              <Panel
+                title={playerCuts.length > 0 ? "File another version" : "File the cut"}
+                action={
+                  <span className="text-[13px] text-ink-50">
+                    {playerCuts.length > 0
+                      ? `v${playerCuts.length + 1} next`
+                      : "when it comes back"}
+                  </span>
+                }
+              >
+                <DeliveredCutUploader jobId={job.id} />
               </Panel>
             )}
 
@@ -241,7 +295,11 @@ export default async function EditJobPage({
             {reviewable && (
               <Panel
                 title="Approve this cut"
-                sub={`Releases ${money(jobTotalCents(job))} to ${editorName}, out of credits you already spent.`}
+                sub={
+                  EDITOR_MARKET_ENABLED
+                    ? `Releases ${money(jobTotalCents(job))} to ${editorName}, out of credits you already spent.`
+                    : "Closes the batch out. Paying your editor is between you and them."
+                }
               >
                 <form action={approveEditJob} className="space-y-4">
                   <input type="hidden" name="job_id" value={job.id} />
@@ -273,7 +331,11 @@ export default async function EditJobPage({
               // still the thing you would be editing. closed once it is out of
               // your hands and the page is about what came back.
               open={!claimed}
-              action={<span className="text-[13px] text-ink-50">{payLabel(job)}</span>}
+              action={
+                EDITOR_MARKET_ENABLED ? (
+                  <span className="text-[13px] text-ink-50">{payLabel(job)}</span>
+                ) : null
+              }
             >
               <div className="space-y-4">
                 {/* a job is a batch, not one cut, and every other number on this
@@ -283,7 +345,9 @@ export default async function EditJobPage({
                     {bundleLabel(job)}
                   </p>
                   <span className="text-[13px] text-ink-50">
-                    one claim, one editor, the whole batch
+                    {EDITOR_MARKET_ENABLED
+                      ? "one claim, one editor, the whole batch"
+                      : "one link, one editor, the whole batch"}
                   </span>
                 </div>
 
@@ -298,9 +362,16 @@ export default async function EditJobPage({
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {job.credits > 0 && (
+                  {EDITOR_MARKET_ENABLED ? (
+                    job.credits > 0 && (
+                      <Pill tone="flame">
+                        {creditsLabel(job.credits)} · {TIER_LABEL[job.tier]}
+                        {job.is_rush ? " · rush" : ""}
+                      </Pill>
+                    )
+                  ) : (
                     <Pill tone="flame">
-                      {creditsLabel(job.credits)} · {TIER_LABEL[job.tier]}
+                      {TIER_LABEL[job.tier]}
                       {job.is_rush ? " · rush" : ""}
                     </Pill>
                   )}
@@ -448,8 +519,9 @@ export default async function EditJobPage({
                     <form action={cancelEditJob} className="flex flex-wrap items-center gap-4">
                       <input type="hidden" name="job_id" value={job.id} />
                       <p className="min-w-0 flex-1 text-[13.5px] text-ink-50">
-                        Cancel takes it off the board, keeps the job on your list, and
-                        refunds the credits it spent.
+                        {EDITOR_MARKET_ENABLED
+                          ? "Cancel takes it off the board, keeps the job on your list, and refunds the credits it spent."
+                          : "Cancel kills the handoff link and keeps the job on your list."}
                       </p>
                       <Submit tone="line" size="sm" pendingLabel="Cancelling">
                         Cancel job
@@ -458,8 +530,9 @@ export default async function EditJobPage({
                     <form action={deleteEditJob} className="flex flex-wrap items-center gap-4">
                       <input type="hidden" name="job_id" value={job.id} />
                       <p className="min-w-0 flex-1 text-[13.5px] text-ink-50">
-                        Delete refunds the credits and removes it and its thread for
-                        good. Only an open job can go.
+                        {EDITOR_MARKET_ENABLED
+                          ? "Delete refunds the credits and removes it and its thread for good. Only an open job can go."
+                          : "Delete removes the job, its files and its links for good. Only an open job can go."}
                       </p>
                       <Submit tone="line" size="sm" pendingLabel="Deleting">
                         Delete this job
@@ -474,12 +547,39 @@ export default async function EditJobPage({
           {/* ================================================ the talking */}
           <div className="min-w-0 space-y-5">
             <JobConversation
-              editorLabel={editor ? editorName : "Editor"}
-              editorCount={messageCount}
+              editorLabel={EDITOR_MARKET_ENABLED && editor ? editorName : "Editor"}
+              editorCount={EDITOR_MARKET_ENABLED ? messageCount : 0}
               managerCount={openNotes.length}
               // open on whichever side is actually waiting for something.
               initial={openNotes.length > 0 ? "manager" : "editor"}
               editor={
+                !EDITOR_MARKET_ENABLED ? (
+                  // no board and no editor account on this deploy. the tab that
+                  // held a claim and a thread holds the one thing that replaces
+                  // both: the url the batch lives on.
+                  <div className="space-y-5">
+                    <div>
+                      <p className={LABEL}>Their link</p>
+                      <p className="mb-3 mt-1 text-[13px] leading-[1.6] text-ink-50">
+                        Everything on this job on one page: the brief, the
+                        videos, the assets, the brand&apos;s kit, all
+                        downloadable. No account, no login, and they never see
+                        what you are paying.
+                      </p>
+                      <HandoffLinkBox jobId={job.id} link={handoffLink} />
+                    </div>
+
+                    <div className="space-y-2 border-t border-line pt-4">
+                      <p className={LABEL}>How it comes back</p>
+                      <p className="text-[13px] leading-[1.6] text-ink-50">
+                        Delivery is manual. Your editor sends the finished cut
+                        back the way they always do and you file it on the left.
+                        Anything you upload here shows up on their link straight
+                        away, so a missing asset does not need a new link.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
                 <div className="space-y-5">
                   {editor ? (
                     <div className="flex flex-wrap items-center gap-3">
@@ -547,6 +647,7 @@ export default async function EditJobPage({
                     </div>
                   )}
                 </div>
+                )
               }
               manager={
                 <div className="space-y-5">

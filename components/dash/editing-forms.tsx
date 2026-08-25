@@ -6,6 +6,7 @@ import { useActionState, useState, type ReactNode } from "react";
 import {
   postJobComment,
   recordDealAsset,
+  recordDeliveredCut,
   recordJobFile,
   requestRevisions,
   updateEditJob,
@@ -564,5 +565,32 @@ export function CommentForm({ jobId }: { jobId: string }) {
         <Note state={state} />
       </div>
     </form>
+  );
+}
+
+/**
+ * The creator filing the cut their editor sent back.
+ *
+ * On this deploy the editor has no login: they read the batch off a handoff
+ * link and send the finished file back over whatever chat they already use. So
+ * the delivery is a creator upload, and `recordDeliveredCut` does everything
+ * the editor's own delivery did — a file row, a versioned deliverable, the flip
+ * to delivered — off the same object.
+ *
+ * The folder is `<job>/assets`, not `<job>/cuts`: cuts is the prefix storage
+ * only lets a claimed editor write to, and there is no claimed editor here.
+ */
+export function DeliveredCutUploader({ jobId }: { jobId: string }) {
+  const router = useRouter();
+
+  return (
+    <Dropzone
+      folder={`${jobId}/assets`}
+      accept="video/*"
+      label="Drop the finished cut"
+      hint="What came back from your editor. Every drop is a new version, so v2 goes here too."
+      onUploaded={(file) => recordDeliveredCut({ jobId, ...file })}
+      onDone={() => router.refresh()}
+    />
   );
 }

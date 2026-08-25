@@ -11,7 +11,13 @@ import {
   CREDIT_CENTS,
 } from "@/lib/credits";
 import { createPackCheckout } from "@/lib/credits-server";
-import { jobTotalCents, safeUrl, type LinkItem, type PayKind } from "@/lib/editing";
+import {
+  EDITOR_MARKET_ENABLED,
+  jobTotalCents,
+  safeUrl,
+  type LinkItem,
+  type PayKind,
+} from "@/lib/editing";
 import { notifyJobPosted } from "@/lib/editing-notify";
 import { push } from "@/lib/notify-server";
 import { money, parseCount } from "@/lib/money";
@@ -346,9 +352,13 @@ export async function createEditJob(
   // column under a per-user lock, so two tabs cannot both spend the last
   // credit. if the wallet is short, the job comes straight back out: an
   // unpaid job on the board would be work an editor does for nothing.
-  const { error: spendError } = await supabase.rpc("spend_job_credits", {
-    p_job: data.id,
-  });
+  //
+  // nothing to pay for with the market off: there is no board and no editor
+  // being hired through us, the creator hands the batch to their own editor
+  // through a link. posting is free and the wallet is never touched.
+  const { error: spendError } = EDITOR_MARKET_ENABLED
+    ? (await supabase.rpc("spend_job_credits", { p_job: data.id }))
+    : { error: null };
   if (spendError) {
     await supabase.from("edit_jobs").delete().eq("id", data.id).eq("status", "open");
     if (spendError.message.includes("not enough credits")) {
@@ -366,15 +376,17 @@ export async function createEditJob(
   await attachStagedFiles(supabase, data.id, user.id, formData);
 
   // ping the editors' discord that work landed. best effort: the job is
-  // posted and paid whether or not the webhook answers.
+  // posted and paid whether or not the webhook answers. silent with the market
+  // off: there is no pool of editors watching that channel here.
   // title and brand are named explicitly: they no longer live on `parsed.row`
   // and spreading it alone would hand the ping an undefined title to slice.
-  await notifyJobPosted({
-    id: data.id,
-    title,
-    brand_name: deal.brand.brand_name,
-    ...parsed.row,
-  });
+  if (EDITOR_MARKET_ENABLED)
+    await notifyJobPosted({
+      id: data.id,
+      title,
+      brand_name: deal.brand.brand_name,
+      ...parsed.row,
+    });
 
   revalidatePath("/editing");
   revalidatePath("/editing/credits");
@@ -627,7 +639,11 @@ export async function approveEditJob(formData: FormData): Promise<void> {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!job || !job.editor_id) return;
+  // a job handed off through a link has no editor_id at all: the creator filed
+  // the cut themselves and there is nobody here to pay. approving it is the
+  // status flip and the review inbox, and nothing else.
+  if (!job) return;
+  if (EDITOR_MARKET_ENABLED && !job.editor_id) return;
   if (job.status !== "delivered" && job.status !== "revisions") return;
 
   // the two-tap review: an optional 1-5 on the way past. it feeds the
@@ -655,11 +671,9 @@ export async function approveEditJob(formData: FormData): Promise<void> {
     body: "approved",
   });
 
-  const { data: existing } = await supabase
-    .from("editor_payouts")
-    .select("id")
-    .eq("job_id", id)
-    .limit(1);
+  const { data: existing } = job.editor_id
+    ? await supabase.from("editor_payouts").select("id").eq("job_id", id).limit(1)
+    : { data: [{ id: "none" }] };
 
   if (!existing?.length) {
     await supabase.from("editor_payouts").insert({
@@ -683,20 +697,23 @@ export async function approveEditJob(formData: FormData): Promise<void> {
     .eq("job_id", id)
     .is("handled_at", null);
 
-  await push({
-    userId: String(job.editor_id),
-    kind: "job_approved",
-    title: `${String(job.title)} was approved`,
-    body: `${money(
-      jobTotalCents({
-        pay_kind: job.pay_kind as PayKind,
-        pay_cents: Number(job.pay_cents),
-        video_count: Number(job.video_count),
-      })
-    )} is owed to you. request it from your desk whenever you like.`,
-    href: "/editors/payouts",
-    subject: id,
-  });
+  // nobody to tell on a handoff job: the editor has no account here, and the
+  // creator approving it is the person who already knows.
+  if (job.editor_id)
+    await push({
+      userId: String(job.editor_id),
+      kind: "job_approved",
+      title: `${String(job.title)} was approved`,
+      body: `${money(
+        jobTotalCents({
+          pay_kind: job.pay_kind as PayKind,
+          pay_cents: Number(job.pay_cents),
+          video_count: Number(job.video_count),
+        })
+      )} is owed to you. request it from your desk whenever you like.`,
+      href: "/editors/payouts",
+      subject: id,
+    });
 
   revalidatePath(`/editing/${id}`);
   revalidatePath("/editing");
@@ -1083,4 +1100,194 @@ export async function dismissClientNote(formData: FormData): Promise<void> {
     .eq("job_id", jobId);
 
   revalidatePath(`/editing/${jobId}`);
+}
+
+// ---------------------------------------------------------- handoff links
+
+/**
+ * Make the job's editor handoff link, or rotate it.
+ *
+ * The mirror of `createReviewLink`, pointed at the other person: that url goes
+ * to whoever signs a cut off, this one goes to whoever makes it. Same rules —
+ * one link per job, rotating replaces the token in place, and that is the whole
+ * revoke story for a url already sitting in somebody's dms.
+ *
+ * The token comes from `new_review_token()` rather than a second generator: how
+ * a capability is minted should not depend on which feature asked for it.
+ */
+export async function createHandoffLink(
+  _prev: EditingState,
+  formData: FormData
+): Promise<EditingState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  const jobId = text(formData.get("job_id"), 40);
+  if (!jobId) return { error: "Missing job." };
+  const label = text(formData.get("label"), 80);
+  const rotate = String(formData.get("rotate") ?? "") === "1";
+
+  // proves the job is this creator's before anything is written. rls would
+  // catch the insert anyway, but a clean message beats a policy error.
+  const { data: job } = await supabase
+    .from("edit_jobs")
+    .select("id")
+    .eq("id", jobId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!job) return { error: "That job is not yours." };
+
+  const { data: token, error: tokenError } = await supabase.rpc("new_review_token");
+  if (tokenError || !token) return { error: "Could not mint a link. Try again." };
+
+  const { data: existing } = await supabase
+    .from("edit_job_handoff_links")
+    .select("id, label")
+    .eq("job_id", jobId)
+    .maybeSingle();
+
+  if (existing && !rotate) {
+    // already there: this call is only editing the label
+    const { error } = await supabase
+      .from("edit_job_handoff_links")
+      .update({ label, updated_at: new Date().toISOString() })
+      .eq("id", existing.id);
+    if (error) return { error: error.message };
+    revalidatePath(`/editing/${jobId}`);
+    return { ok: "Saved." };
+  }
+
+  const { error } = await supabase.from("edit_job_handoff_links").upsert(
+    {
+      job_id: jobId,
+      user_id: user.id,
+      token: String(token),
+      // rotating is not a rename: without this the "raj, my editor" note is
+      // wiped by a fresh url.
+      label: label ?? ((existing?.label as string | null) ?? null),
+      revoked_at: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "job_id" }
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath(`/editing/${jobId}`);
+  return {
+    ok: rotate ? "New link made. The old one is dead." : "Link ready. Send it over.",
+  };
+}
+
+/** Turn the handoff link off or back on without changing the token. */
+export async function toggleHandoffLink(formData: FormData): Promise<void> {
+  const { supabase, user } = await authed();
+  if (!user) return;
+
+  const jobId = text(formData.get("job_id"), 40);
+  if (!jobId) return;
+  const off = String(formData.get("off") ?? "") === "1";
+
+  await supabase
+    .from("edit_job_handoff_links")
+    .update({
+      revoked_at: off ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("job_id", jobId)
+    .eq("user_id", user.id);
+
+  revalidatePath(`/editing/${jobId}`);
+}
+
+// -------------------------------------------------------- manual delivery
+
+/**
+ * File the cut the editor sent back.
+ *
+ * The handoff room is read only, so nothing an anonymous url holder does can
+ * write a row here. The cut arrives over whatever channel the editor already
+ * uses and the CREATOR files it, which is what "delivery is manual" means.
+ *
+ * Everything after the upload is exactly what the editor's own `recordCutFile`
+ * does: a file row, a deliverable, the flip to delivered, a status event. The
+ * deliverable's `editor_id` is the creator, because that column means "who
+ * filed this" and nothing reads it as an entitlement — the payout is keyed off
+ * `edit_jobs.editor_id`, which stays null on a handoff job.
+ */
+export async function recordDeliveredCut(input: {
+  jobId: string;
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+}): Promise<{ error?: string }> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  const jobId = String(input.jobId ?? "").slice(0, 40);
+  const path = String(input.path ?? "").slice(0, 300);
+  if (!jobId || !ownedPath(path, jobId, user.id)) {
+    return { error: "That upload does not belong to this job." };
+  }
+
+  const { data: job } = await supabase
+    .from("edit_jobs")
+    .select("id, status")
+    .eq("id", jobId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!job) return { error: "That job is not yours." };
+  if (job.status === "cancelled") return { error: "That job was cancelled." };
+
+  const name = String(input.name ?? "").slice(0, 200) || "cut";
+
+  const { error: fileError } = await supabase.from("edit_job_files").insert({
+    job_id: jobId,
+    uploader_id: user.id,
+    kind: "cut",
+    path,
+    name,
+    mime: String(input.mime ?? "").slice(0, 100) || null,
+    size_bytes: Number.isFinite(input.size) ? Math.max(0, Math.round(input.size)) : null,
+  });
+  if (fileError) return { error: fileError.message };
+
+  const { count } = await supabase
+    .from("edit_job_deliverables")
+    .select("id", { count: "exact", head: true })
+    .eq("job_id", jobId);
+  const version = (count ?? 0) + 1;
+
+  const { error } = await supabase.from("edit_job_deliverables").insert({
+    job_id: jobId,
+    editor_id: user.id,
+    // the sentinel, not a url: resolved to a signed url wherever it renders.
+    url: `storage://editing-assets/${path}`,
+    note: name,
+    version,
+  });
+  if (error) {
+    // the delivery never landed, so the file row goes too and nothing
+    // half-exists for the page to draw.
+    await supabase.from("edit_job_files").delete().eq("path", path);
+    return { error: error.message };
+  }
+
+  const { error: statusError } = await supabase
+    .from("edit_jobs")
+    .update({ status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .eq("user_id", user.id);
+  if (statusError) return { error: statusError.message };
+
+  await supabase.from("edit_job_events").insert({
+    job_id: jobId,
+    author_id: user.id,
+    kind: "status",
+    body: `filed cut v${version}`,
+  });
+
+  revalidatePath(`/editing/${jobId}`);
+  revalidatePath("/editing");
+  return {};
 }
