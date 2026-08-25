@@ -1,3 +1,4 @@
+2026-08-25  batch flow goes ink and squared: every pill is rounded-md, buttons / switch / badges / focus rings are black not navy, clip tiles 8 across on desktop with smaller badges, caption thumbs md, hashtag input a 36px row.
 2026-08-25  scheduler (autoposting) restyled to the minimal grid: no Tools breadcrumb bar, one toolbar (title, brand picker, connections, screen switch, connect), step strip as a quiet segmented row, cards without shadow, upload / editors boxes quieter, footer and buttons squared. connect button matches.
 2026-08-25  deals list redesigned in the dashboard's minimal style: thin toolbar, four tiles (live, views, earned, owed), one quiet table with dot status chips, small platform glyphs, sync line in the card header.
 2026-08-25  bell removed from the rail and the mobile bar. layout no longer loads notifications. /notifications actions and lib/notify* left in place, nothing mounts them.

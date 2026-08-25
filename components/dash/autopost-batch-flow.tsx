@@ -401,11 +401,11 @@ export function AutopostBatchFlow({
                         setDragClip(null);
                       }}
                       title={clip?.name}
-                      className={`flex cursor-grab items-center gap-2 rounded-pill border border-line bg-paper py-1 pl-1 pr-2.5 transition-opacity ${
+                      className={`flex cursor-grab items-center gap-2 rounded-md border border-line bg-paper py-1 pl-1 pr-2.5 transition-opacity ${
                         dragClip === id ? "opacity-40" : ""
                       }`}
                     >
-                      <span className="flex size-[22px] items-center justify-center rounded-pill bg-flame text-[11px] font-extrabold text-on-accent">
+                      <span className="flex size-[22px] items-center justify-center rounded-md bg-ink text-[11px] font-extrabold text-paper">
                         {i + 1}
                       </span>
                       <span className="max-w-[130px] truncate text-[12.5px] font-semibold">
@@ -455,11 +455,11 @@ export function AutopostBatchFlow({
               setDragging(false);
               void takeFiles(Array.from(e.dataTransfer.files));
             }}
-            className={`max-h-[560px] overflow-y-auto p-5 transition-colors ${
-              dragging ? "bg-ember" : ""
+            className={`p-4 transition-colors ${
+              dragging ? "bg-shell" : ""
             }`}
           >
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="grid gap-3 lg:grid-cols-2">
               <UploadBox
                 uploading={uploading}
                 progress={progress}
@@ -469,7 +469,7 @@ export function AutopostBatchFlow({
               {DRIVE_READY ? (
                 null
               ) : (
-                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-line bg-shell/60 px-5 py-9 text-center">
+                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-line bg-shell/60 px-5 py-6 text-center">
                   <p className="text-[13.5px] font-semibold">
                     from your editors
                   </p>
@@ -487,10 +487,10 @@ export function AutopostBatchFlow({
                 filename tell you nothing a frame tells you instantly. */}
             {library.length > 0 ? (
               <>
-                <p className="mb-2.5 mt-5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-ink-50">
+                <p className="mb-2 mt-4 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-ink-50">
                   {clips.length > 0 ? `ready for ${deal.brandName}` : "your uploads"}
                 </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-5 lg:grid-cols-8">
                   {library.map((clip) => {
                     const at = picked.indexOf(clip.id);
                     const on = at > -1;
@@ -503,32 +503,32 @@ export function AutopostBatchFlow({
                         className="group/tile text-left"
                       >
                         <span
-                          className={`relative block overflow-hidden rounded-xl border-2 transition-colors ${
+                          className={`relative block overflow-hidden rounded-lg border-2 transition-colors ${
                             on
-                              ? "border-flame"
+                              ? "border-ink"
                               : "border-transparent group-hover/tile:border-line"
                           }`}
                         >
                           <ClipThumb src={clip.previewUrl} size="tile" />
                           <span
-                            className={`absolute left-1.5 top-1.5 flex size-[24px] items-center justify-center rounded-pill text-[11px] font-extrabold ${
+                            className={`absolute left-1.5 top-1.5 flex size-5 items-center justify-center rounded-[5px] text-[10px] font-bold ${
                               on
-                                ? "bg-flame text-on-accent"
+                                ? "bg-ink text-paper"
                                 : "border-[1.5px] border-paper/80 bg-ink/25 text-paper"
                             }`}
                           >
                             {on ? at + 1 : ""}
                           </span>
                           {clip.source !== "editor" && (
-                            <span className="absolute right-1.5 top-1.5 rounded-pill bg-ink/55 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-paper">
+                            <span className="absolute right-1.5 top-1.5 rounded-[4px] bg-ink/60 px-1 py-px text-[9px] font-semibold uppercase tracking-[0.06em] text-paper">
                               {clip.source === "upload" ? "yours" : "variation"}
                             </span>
                           )}
                         </span>
-                        <span className="mt-1.5 block truncate text-[13px] font-semibold">
+                        <span className="mt-1 block truncate text-[11.5px] font-semibold">
                           {clip.name}
                         </span>
-                        <span className="block truncate text-[12px] text-ink-50">
+                        <span className="block truncate text-[10.5px] text-ink-50">
                           {clip.by} · {clip.when}
                         </span>
                       </button>
@@ -537,7 +537,7 @@ export function AutopostBatchFlow({
                 </div>
               </>
             ) : (
-              <p className="mt-5 text-center text-[13.5px] text-ink-50">
+              <p className="mt-4 text-center text-[12px] text-ink-50">
                 nothing from your editors or Variations for {deal.name} yet. drop
                 your own cuts anywhere on this card.
               </p>
@@ -569,16 +569,16 @@ export function AutopostBatchFlow({
               </span>
             </div>
 
-            <div className="px-5 py-4">
+            <div className="px-4 py-3">
               <div className="flex flex-wrap gap-1.5">
                 {tags.map((tag) => (
                   <button
                     type="button"
                     key={tag}
                     onClick={() => setTags(tags.filter((t) => t !== tag))}
-                    className={`rounded-pill px-3 py-1 text-[12.5px] font-bold transition-colors ${
+                    className={`rounded-md px-3 py-1 text-[12.5px] font-bold transition-colors ${
                       useTags
-                        ? "bg-ember text-flame-dark hover:bg-flame hover:text-on-accent"
+                        ? "bg-shell text-ink hover:bg-ink hover:text-paper"
                         : "bg-shell text-ink-50"
                     }`}
                   >
@@ -590,7 +590,7 @@ export function AutopostBatchFlow({
                 )}
               </div>
 
-              <div className="mt-3 flex items-center gap-2 rounded-pill border border-line px-3 py-2 focus-within:border-flame">
+              <div className="mt-3 flex h-9 items-center gap-2 rounded-lg border border-line px-3 focus-within:border-ink">
                 <span className="text-[13px] font-bold text-ink-50">#</span>
                 <input
                   value={tagDraft}
@@ -606,7 +606,7 @@ export function AutopostBatchFlow({
                 />
                 <span
                   className={`shrink-0 text-[12px] font-bold ${
-                    tagChars > 150 ? "text-flame-dark" : "text-ink-50"
+                    tagChars > 150 ? "text-ink" : "text-ink-50"
                   }`}
                 >
                   {tagChars} chars
@@ -614,7 +614,7 @@ export function AutopostBatchFlow({
                 <button
                   type="button"
                   onClick={addTag}
-                  className="shrink-0 rounded-pill bg-flame px-3 py-1 text-[13px] font-bold text-on-accent transition-colors hover:bg-flame-dark"
+                  className="shrink-0 rounded-md bg-ink px-3 py-1 text-[13px] font-bold text-paper transition-colors hover:bg-ink/85"
                 >
                   add
                 </button>
@@ -640,9 +640,9 @@ export function AutopostBatchFlow({
           </Card>
 
           <Card>
-            <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-4">
+            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
               <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">captions</h2>
-              <span className="text-[13.5px] text-ink-50">
+              <span className="text-[11.5px] text-ink-50">
                 {picked.length} video{picked.length === 1 ? "" : "s"}, in posting order
               </span>
               <Ghost
@@ -666,10 +666,10 @@ export function AutopostBatchFlow({
                 const full = finalCaption(caption, tags, useTags);
                 const over = full.length > MAX_CAPTION;
                 return (
-                  <div key={id} className="flex gap-3 px-5 py-4">
+                  <div key={id} className="flex gap-3 px-4 py-3">
                     <div className="relative shrink-0">
-                      <ClipThumb src={clip?.previewUrl ?? null} size="lg" />
-                      <span className="absolute -left-1.5 -top-1.5 flex size-5 items-center justify-center rounded-pill bg-flame text-[10px] font-extrabold text-on-accent">
+                      <ClipThumb src={clip?.previewUrl ?? null} size="md" />
+                      <span className="absolute -left-1.5 -top-1.5 flex size-5 items-center justify-center rounded-md bg-ink text-[10px] font-extrabold text-paper">
                         {i + 1}
                       </span>
                     </div>
@@ -688,7 +688,7 @@ export function AutopostBatchFlow({
                               return next;
                             });
                           }}
-                          className="ml-auto shrink-0 text-[12.5px] font-semibold text-ink-50 transition-colors hover:text-flame"
+                          className="ml-auto shrink-0 text-[12.5px] font-semibold text-ink-50 transition-colors hover:text-ink"
                         >
                           remove
                         </button>
@@ -701,7 +701,7 @@ export function AutopostBatchFlow({
                           setCaptions({ ...captions, [id]: e.target.value })
                         }
                         placeholder="what this one says"
-                        className="mt-1.5 w-full resize-none rounded-xl border border-line bg-paper px-3 py-2 text-[14px] leading-[1.5] outline-none focus:border-flame"
+                        className="mt-1.5 w-full resize-none rounded-lg border border-line bg-paper px-3 py-2 text-[13px] leading-[1.5] outline-none focus:border-ink"
                       />
 
                       <div className="mt-1.5 flex items-start gap-3">
@@ -719,14 +719,14 @@ export function AutopostBatchFlow({
                         </p>
                         <span
                           className={`shrink-0 text-[12px] font-bold ${
-                            over ? "text-flame-dark" : "text-ink-50"
+                            over ? "text-ink" : "text-ink-50"
                           }`}
                         >
                           {full.length}/{MAX_CAPTION}
                         </span>
                       </div>
                       {over && (
-                        <p className="mt-1 text-[12px] font-bold text-flame-dark">
+                        <p className="mt-1 text-[12px] font-bold text-ink">
                           too long with the tags on. trim it or drop a tag.
                         </p>
                       )}
@@ -877,7 +877,7 @@ export function AutopostBatchFlow({
                       onChange={(e) =>
                         patch.tiktok({ coverSecond: Math.max(0, Number(e.target.value) || 0) })
                       }
-                      className="w-20 rounded-pill border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-flame"
+                      className="w-20 rounded-md border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-ink"
                     />
                     <span className="text-[12.5px] text-ink-50">
                       seconds in. the frame tiktok shows on your grid.
@@ -948,7 +948,7 @@ export function AutopostBatchFlow({
                         value={options.instagram.collab}
                         placeholder="brandhandle"
                         onChange={(e) => patch.instagram({ collab: e.target.value })}
-                        className="w-44 rounded-pill border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-flame"
+                        className="w-44 rounded-md border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-ink"
                       />
                       <span className="text-[12.5px] text-ink-50">
                         no @. they have to accept it.
@@ -965,7 +965,7 @@ export function AutopostBatchFlow({
                       value={options.instagram.audioName}
                       placeholder="original audio name"
                       onChange={(e) => patch.instagram({ audioName: e.target.value })}
-                      className="w-44 rounded-pill border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-flame"
+                      className="w-44 rounded-md border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-ink"
                     />
                     <span className="text-[12.5px] text-ink-50">
                       renames the reel&apos;s original audio. instagram allows this once.
@@ -1106,7 +1106,7 @@ export function AutopostBatchFlow({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-end gap-x-6 gap-y-4 px-5 py-4">
+            <div className="flex flex-wrap items-end gap-x-6 gap-y-4 px-4 py-3">
               <Field label="first post">
                 <DateBox
                   value={cfg.start}
@@ -1184,7 +1184,7 @@ export function AutopostBatchFlow({
                           day: "numeric",
                         })}
                       </span>
-                      <span className="rounded-pill bg-paper px-2 py-0.5 text-[11.5px] font-bold text-ink-50">
+                      <span className="rounded-md bg-paper px-2 py-0.5 text-[11.5px] font-bold text-ink-50">
                         {onDay} post{onDay === 1 ? "" : "s"}
                       </span>
                     </div>
@@ -1271,7 +1271,7 @@ export function AutopostBatchFlow({
           <button
             type="button"
             onClick={() => go((step + 1) as Step)}
-            className="ml-auto inline-flex h-8 items-center rounded-lg bg-flame px-4 text-[12.5px] font-semibold text-on-accent transition-colors hover:bg-flame-dark"
+            className="ml-auto inline-flex h-8 items-center rounded-lg bg-ink px-4 text-[12.5px] font-semibold text-paper transition-colors hover:bg-ink/85"
           >
             next →
           </button>
@@ -1280,7 +1280,7 @@ export function AutopostBatchFlow({
             type="button"
             onClick={confirm}
             disabled={busy || rows.length === 0}
-            className="ml-auto inline-flex h-8 items-center rounded-lg bg-flame px-4 text-[12.5px] font-semibold text-on-accent transition-colors hover:bg-flame-dark disabled:bg-flame/40"
+            className="ml-auto inline-flex h-8 items-center rounded-lg bg-ink px-4 text-[12.5px] font-semibold text-paper transition-colors hover:bg-ink/85 disabled:bg-ink/40"
           >
             {busy
               ? "scheduling"
@@ -1360,7 +1360,7 @@ function Ghost({
  */
 function Segmented({ children }: { children: ReactNode }) {
   return (
-    <div className="flex gap-0.5 rounded-pill border border-line bg-shell p-0.5">
+    <div className="flex gap-0.5 rounded-md border border-line bg-shell p-0.5">
       {children}
     </div>
   );
@@ -1380,8 +1380,8 @@ function Seg({
       type="button"
       onClick={onClick}
       aria-pressed={on}
-      className={`min-w-[38px] rounded-pill px-3 py-1 text-[12.5px] font-bold transition-colors ${
-        on ? "bg-flame text-on-accent" : "text-ink-50 hover:text-ink"
+      className={`min-w-[38px] rounded-md px-3 py-1 text-[12.5px] font-bold transition-colors ${
+        on ? "bg-ink text-paper" : "text-ink-50 hover:text-ink"
       }`}
     >
       {children}
@@ -1415,7 +1415,7 @@ function DateBox({
 }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-pill border border-line focus-within:border-flame ${
+      className={`inline-flex shrink-0 items-center rounded-md border border-line focus-within:border-ink ${
         quiet ? "bg-shell px-2 py-1" : "bg-paper px-3 py-1.5"
       }`}
     >
@@ -1446,7 +1446,7 @@ function TimeBox({
 }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-pill border border-line focus-within:border-flame ${
+      className={`inline-flex shrink-0 items-center rounded-md border border-line focus-within:border-ink ${
         big ? "bg-shell px-2.5 py-1" : "bg-paper px-3 py-1.5"
       }`}
     >
@@ -1479,13 +1479,13 @@ function Switch({
       className="flex w-full items-center gap-2.5 py-1.5 text-left"
     >
       <span
-        className={`flex h-5 w-[34px] shrink-0 items-center rounded-pill p-0.5 transition-colors ${
-          on ? "justify-end bg-flame" : "justify-start bg-line"
+        className={`flex h-[18px] w-[32px] shrink-0 items-center rounded-md p-[2px] transition-colors ${
+          on ? "justify-end bg-ink" : "justify-start bg-line"
         }`}
       >
-        <span className="size-4 rounded-pill bg-paper" />
+        <span className="size-[14px] rounded-[4px] bg-paper" />
       </span>
-      <span className="text-[13.5px] font-bold">{label}</span>
+      <span className="text-[12.5px] font-semibold">{label}</span>
     </button>
   );
 }
@@ -1503,7 +1503,7 @@ function Choose({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="cursor-pointer rounded-pill border border-line bg-paper px-3 py-1.5 text-[12.5px] font-bold outline-none focus:border-flame"
+      className="cursor-pointer rounded-md border border-line bg-paper px-3 py-1.5 text-[12.5px] font-bold outline-none focus:border-ink"
     >
       {options.map((o) => (
         <option key={o} value={o}>
@@ -1517,7 +1517,7 @@ function Choose({
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-3">
-      <span className="w-24 text-[13.5px] font-bold">{label}</span>
+      <span className="w-24 text-[12.5px] font-semibold">{label}</span>
       {children}
     </div>
   );
@@ -1559,7 +1559,7 @@ function PlatformCard({
           {PLATFORM_LABEL[platform]}
         </h2>
       </div>
-      <div className="px-5 py-4">{children}</div>
+      <div className="px-4 py-3">{children}</div>
     </section>
   );
 }
@@ -1622,7 +1622,7 @@ function Disclosures({ children }: { children: ReactNode }) {
  *  error. Ember rather than the live green, because nothing here is good news. */
 function Warn({ children }: { children: ReactNode }) {
   return (
-    <p className="my-2 rounded-xl bg-ember px-3.5 py-2.5 text-[12.5px] font-semibold leading-[1.5] text-flame-dark">
+    <p className="my-2 rounded-xl bg-ember px-3.5 py-2.5 text-[12.5px] font-semibold leading-[1.5] text-ink">
       {children}
     </p>
   );
@@ -1659,14 +1659,14 @@ function TagBox({
               type="button"
               key={tag}
               onClick={() => onChange(tags.filter((t) => t !== tag))}
-              className="rounded-pill bg-ember px-3 py-1 text-[12.5px] font-bold text-flame-dark transition-colors hover:bg-flame hover:text-on-accent"
+              className="rounded-md bg-ember px-3 py-1 text-[12.5px] font-bold text-ink transition-colors hover:bg-ink hover:text-paper"
             >
               {tag} ✕
             </button>
           ))}
         </div>
       )}
-      <div className="flex items-center gap-2 rounded-pill border border-line px-3 py-1.5 focus-within:border-flame">
+      <div className="flex items-center gap-2 rounded-md border border-line px-3 py-1.5 focus-within:border-ink">
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -1682,7 +1682,7 @@ function TagBox({
         <button
           type="button"
           onClick={add}
-          className="shrink-0 rounded-pill bg-flame px-3 py-0.5 text-[12.5px] font-bold text-on-accent transition-colors hover:bg-flame-dark"
+          className="shrink-0 rounded-md bg-ink px-3 py-0.5 text-[12.5px] font-bold text-paper transition-colors hover:bg-ink/85"
         >
           add
         </button>
@@ -1695,7 +1695,7 @@ function Box({ on }: { on: boolean }) {
   return (
     <span
       className={`flex size-5 shrink-0 items-center justify-center rounded-[6px] border-[1.5px] ${
-        on ? "border-flame bg-flame text-on-accent" : "border-line bg-paper"
+        on ? "border-ink bg-ink text-paper" : "border-line bg-paper"
       }`}
     >
       {on && (
@@ -1727,9 +1727,9 @@ function UploadBar({ fraction }: { fraction: number }) {
   const pct = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
   return (
     <span className="block">
-      <span className="block h-2 overflow-hidden rounded-pill bg-shell">
+      <span className="block h-2 overflow-hidden rounded-md bg-shell">
         <span
-          className="block h-full rounded-pill bg-flame transition-[width] duration-200"
+          className="block h-full rounded-md bg-ink transition-[width] duration-200"
           style={{ width: `${pct}%` }}
         />
       </span>
@@ -1761,8 +1761,8 @@ function UploadBox({
 }) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-lg border border-dashed px-5 py-9 text-center transition-colors ${
-        uploading ? "border-flame bg-ember" : "border-line bg-shell/60 hover:bg-shell"
+      className={`flex flex-col items-center justify-center rounded-lg border border-dashed px-5 py-6 text-center transition-colors ${
+        uploading ? "border-ink bg-shell" : "border-line bg-shell/60 hover:bg-shell"
       }`}
     >
       {uploading ? (

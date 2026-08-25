@@ -25,7 +25,7 @@ const sizes = {
   sm: "h-12 w-9 rounded-[8px]",
   md: "h-[58px] w-11 rounded-[9px]",
   lg: "h-[76px] w-[54px] rounded-[10px]",
-  tile: "aspect-[9/16] w-full rounded-xl",
+  tile: "aspect-[9/16] w-full rounded-md",
 } as const;
 
 export function ClipThumb({
