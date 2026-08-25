@@ -6,8 +6,6 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { brand } from "@/lib/content";
 import { AGENCY_HREF, AGENCY_PEOPLE_HREF, type OrgRole } from "@/lib/org";
-import { NotifBell } from "@/components/notif-bell";
-import type { Notification } from "@/lib/notify";
 import type { Viewer } from "@/lib/viewer";
 import { AccountMenu } from "./account-menu";
 
@@ -178,14 +176,10 @@ function Logo({ small = false }: { small?: boolean }) {
 
 export function SideNav({
   viewer,
-  notifications = [],
-  unreadNotifications = 0,
   isFounder = false,
   agencyRole = null,
 }: {
   viewer: Viewer;
-  notifications?: Notification[];
-  unreadNotifications?: number;
   /** on `admin_emails`. the only thing that earns the Founder row. */
   isFounder?: boolean;
   /** owner or admin of the programme gets the admin rows instead of the student ones. */
@@ -211,7 +205,6 @@ export function SideNav({
           <span className="min-w-0 flex-1">
             <Logo />
           </span>
-          <NotifBell rows={notifications} unread={unreadNotifications} align="left" />
         </div>
 
         <nav className="mt-7 flex flex-col">
@@ -244,7 +237,6 @@ export function SideNav({
           <span className="min-w-0 flex-1">
             <Logo small />
           </span>
-          <NotifBell rows={notifications} unread={unreadNotifications} align="right" size="bar" />
           <AccountMenu viewer={viewer} size="bar" />
         </div>
         <nav className="flex gap-1.5 overflow-x-auto px-3 pb-3">

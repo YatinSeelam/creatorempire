@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { SideNav } from "@/components/dash/side-nav";
 import { ViewAsBanner } from "@/components/dash/view-as";
 import { requireViewer } from "@/lib/access";
-import { loadNotifications } from "@/lib/notify-server";
 import { toViewer } from "@/lib/viewer";
 import { loadWorkspace } from "@/lib/workspace";
 import { readTheme, THEME_COOKIE } from "@/lib/theme";
@@ -33,7 +32,7 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
 
   const viewingAs = jar.get("ugcf_viewas")?.value ?? null;
 
-  const [ws, bell] = await Promise.all([loadWorkspace(), loadNotifications()]);
+  const ws = await loadWorkspace();
 
   const viewer = toViewer(user);
 
@@ -43,8 +42,6 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
       <TzSync current={tz} />
       <SideNav
         viewer={viewer}
-        notifications={bell.rows}
-        unreadNotifications={bell.unread}
         isFounder={access.isFounder}
         agencyRole={ws.agency?.role ?? null}
       />
