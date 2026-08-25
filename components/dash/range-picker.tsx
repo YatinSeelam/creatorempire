@@ -74,9 +74,9 @@ export function RangePicker({
   };
 
   const chip = (on: boolean) =>
-    `flex h-7 shrink-0 items-center rounded-pill px-3 text-[12.5px] font-semibold transition-colors ${
+    `flex h-6 shrink-0 items-center rounded-md px-2.5 text-[11.5px] font-semibold transition-colors ${
       on
-        ? "bg-paper text-ink shadow-[0_1px_3px_rgb(16_16_16/0.14)]"
+        ? "bg-paper text-ink shadow-[0_1px_2px_rgb(16_16_16/0.12)]"
         : "text-ink-50 hover:text-ink"
     }`;
 
@@ -85,7 +85,7 @@ export function RangePicker({
       {/* scrolls sideways rather than wrapping: a control that becomes two rows
           changes the height of the panel header it sits in, which shifts every
           panel beside it on a page that is not allowed to scroll. */}
-      <div className="no-scrollbar flex max-w-full items-center gap-0.5 overflow-x-auto rounded-pill bg-shell p-1">
+      <div className="no-scrollbar flex max-w-full items-center gap-0.5 overflow-x-auto rounded-lg border border-line bg-shell p-0.5">
         {EARNINGS_RANGES.map((r) => (
           <button
             key={r.key}
