@@ -28,6 +28,7 @@ import { fallbackLogo } from "@/lib/brand-catalog";
  */
 
 const sizes = {
+  xs: { box: "size-6", type: "text-[9px]", pad: "p-px" },
   sm: { box: "size-9", type: "text-[13px]", pad: "p-px" },
   md: { box: "size-11", type: "text-[15px]", pad: "p-px" },
   lg: { box: "size-14", type: "text-[19px]", pad: "p-0.5" },

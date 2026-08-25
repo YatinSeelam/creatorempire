@@ -157,19 +157,19 @@ export function AutopostingWorkspace({
                 setPickerOpen((v) => !v);
                 setQuery("");
               }}
-              className={`flex h-9 w-full min-w-[220px] max-w-[340px] items-center gap-2.5 rounded-lg border bg-paper pl-1.5 pr-2.5 text-left transition-colors sm:w-auto ${
+              className={`flex h-8 w-full min-w-[200px] max-w-[300px] items-center gap-2 rounded-lg border bg-paper pl-1.5 pr-2 text-left transition-colors sm:w-auto ${
                 pickerOpen
                   ? "border-flame"
                   : "border-line hover:bg-shell"
               }`}
             >
-              <BrandMark name={deal.brandName} logo={deal.logo} size="sm" />
+              <BrandMark name={deal.brandName} logo={deal.logo} size="xs" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold leading-tight">
+                <span className="block truncate text-[12.5px] font-semibold leading-none">
                   {deal.brandName || deal.name}
                 </span>
                 {subLine(deal) && (
-                  <span className="block truncate text-[11px] leading-tight text-ink-50">
+                  <span className="mt-0.5 block truncate text-[10.5px] leading-none text-ink-50">
                     {subLine(deal)}
                   </span>
                 )}
@@ -469,7 +469,7 @@ function ScreenSwitch<T extends string>({
           type="button"
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`h-7 rounded-md px-2.5 text-[12px] font-semibold transition-colors ${
+          className={`h-[26px] rounded-md px-2.5 text-[12px] font-semibold transition-colors ${
             o.value === value
               ? "bg-paper text-ink shadow-[0_1px_2px_rgb(16_16_16/0.12)]"
               : "text-ink-50 hover:text-ink"
