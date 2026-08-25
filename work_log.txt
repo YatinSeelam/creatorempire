@@ -1,3 +1,4 @@
+2026-08-25  deals list redesigned in the dashboard's minimal style: thin toolbar, four tiles (live, views, earned, owed), one quiet table with dot status chips, small platform glyphs, sync line in the card header.
 2026-08-25  bell removed from the rail and the mobile bar. layout no longer loads notifications. /notifications actions and lib/notify* left in place, nothing mounts them.
 2026-08-25  dashboard redesigned minimal: thin toolbar (greeting, range chips, get an edit / new post / + deal), four tiles, activity chart beside a platform split with tick bars, needs attention + top posts lists, deals as a real table. local Card/Tile primitives, no shared Panel, range chips squared. full page scroll allowed.
 2026-08-25  own supabase project + google only door
