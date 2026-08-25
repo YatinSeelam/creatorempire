@@ -311,7 +311,7 @@ export function AutopostBatchFlow({
 
   return (
     <div>
-      <ol className="mb-4 flex items-stretch gap-1 overflow-hidden rounded-card border border-line bg-paper p-1 shadow-card">
+      <ol className="mb-3 flex items-stretch gap-1 rounded-lg border border-line bg-paper p-1">
         {(
           [
             [1, "clips"],
@@ -331,20 +331,20 @@ export function AutopostBatchFlow({
                 // empty card and no reason for it.
                 onClick={() => n < step && setStep(n as Step)}
                 disabled={n > step}
-                className={`flex w-full items-center justify-center gap-2 rounded-pill px-2 py-2 text-[13.5px] font-bold transition-colors ${
+                className={`flex w-full items-center justify-center gap-2 rounded-md px-2 py-1.5 text-[12.5px] font-semibold transition-colors ${
                   now
-                    ? "bg-flame text-on-accent"
+                    ? "bg-ink text-paper"
                     : done
-                      ? "bg-ember text-flame-dark hover:bg-flame hover:text-on-accent"
+                      ? "text-ink hover:bg-shell"
                       : "text-ink-50"
                 }`}
               >
                 <span
-                  className={`flex size-[21px] shrink-0 items-center justify-center rounded-pill text-[11.5px] font-extrabold ${
+                  className={`flex size-[18px] shrink-0 items-center justify-center rounded-md text-[10.5px] font-bold tabular-nums ${
                     now
-                      ? "bg-on-accent/25 text-on-accent"
+                      ? "bg-paper/20 text-paper"
                       : done
-                        ? "bg-flame text-on-accent"
+                        ? "bg-live-soft text-live"
                         : "bg-shell text-ink-50"
                   }`}
                 >
@@ -359,12 +359,12 @@ export function AutopostBatchFlow({
 
       {step === 1 && (
         <Card>
-          <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
+          <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
             <div className="min-w-0">
-              <h2 className="truncate text-[16px] font-extrabold tracking-[-0.02em]">
+              <h2 className="truncate text-[13.5px] font-bold tracking-[-0.01em]">
                 the clips
               </h2>
-              <p className="text-[12.5px] text-ink-50">
+              <p className="text-[11.5px] text-ink-50">
                 tap to pick. the order you tap is the order they post.
               </p>
             </div>
@@ -469,11 +469,11 @@ export function AutopostBatchFlow({
               {DRIVE_READY ? (
                 null
               ) : (
-                <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-line bg-shell px-5 py-7 text-center">
-                  <p className="text-[15px] font-bold tracking-[-0.01em]">
+                <div className="flex h-full flex-col items-center justify-center rounded-lg border border-dashed border-line bg-shell/60 px-5 py-9 text-center">
+                  <p className="text-[13.5px] font-semibold">
                     from your editors
                   </p>
-                  <p className="mt-1 text-[13px] leading-[1.5] text-ink-50">
+                  <p className="mt-0.5 text-[12px] text-ink-50">
                     {clips.length === 0
                       ? `nothing delivered for ${deal.brandName} yet`
                       : `${clips.length} cut${clips.length === 1 ? "" : "s"} waiting below`}
@@ -553,10 +553,10 @@ export function AutopostBatchFlow({
               act at a different frequency, so the typing sits on its own line
               and the two preset buttons are a footer under a rule. */}
           <Card>
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
+            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
               <div>
-                <h2 className="text-[16px] font-extrabold tracking-[-0.02em]">hashtags</h2>
-                <p className="text-[12.5px] text-ink-50">
+                <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">hashtags</h2>
+                <p className="text-[11.5px] text-ink-50">
                   one list for the whole batch. tap a tag to drop it.
                 </p>
               </div>
@@ -641,7 +641,7 @@ export function AutopostBatchFlow({
 
           <Card>
             <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-4">
-              <h2 className="text-[16px] font-extrabold tracking-[-0.02em]">captions</h2>
+              <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">captions</h2>
               <span className="text-[13.5px] text-ink-50">
                 {picked.length} video{picked.length === 1 ? "" : "s"}, in posting order
               </span>
@@ -742,11 +742,11 @@ export function AutopostBatchFlow({
       {step === 3 && (
         <div className="space-y-4">
           <Card>
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
+            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
               <BrandMark name={deal.brandName} logo={deal.logo} size="sm" />
               <div className="min-w-0">
-                <h2 className="text-[16px] font-extrabold tracking-[-0.02em]">post to</h2>
-                <p className="text-[12.5px] text-ink-50">
+                <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">post to</h2>
+                <p className="text-[11.5px] text-ink-50">
                   the accounts logged in under {deal.brandName}
                 </p>
               </div>
@@ -777,7 +777,7 @@ export function AutopostBatchFlow({
                   return (
                     <div
                       key={p}
-                      className="flex items-center gap-3 rounded-card border border-dashed border-line bg-shell px-4 py-3"
+                      className="flex items-center gap-3 rounded-xl border border-dashed border-line bg-shell px-4 py-3"
                     >
                       <span className="opacity-40">
                         <PlatformGlyph platform={p} tone="brand" className="size-[26px]" />
@@ -809,7 +809,7 @@ export function AutopostBatchFlow({
                       setPlatforms(on ? platforms.filter((x) => x !== p) : [...platforms, p])
                     }
                     aria-pressed={on}
-                    className={`flex items-center gap-3 rounded-card border-2 px-4 py-3 text-left transition-colors ${
+                    className={`flex items-center gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors ${
                       on ? "bg-ember" : "border-line bg-paper hover:bg-shell"
                     }`}
                     style={on ? { borderColor: PLATFORM_COLOR[p] } : undefined}
@@ -1097,10 +1097,10 @@ export function AutopostBatchFlow({
               "2h" and "3h" are not two buttons, they are two positions of
               the same switch. */}
           <Card>
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
+            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
               <div>
-                <h2 className="text-[16px] font-extrabold tracking-[-0.02em]">timing</h2>
-                <p className="text-[12.5px] text-ink-50">
+                <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">timing</h2>
+                <p className="text-[11.5px] text-ink-50">
                   changing any of these redraws every row and drops hand edits
                 </p>
               </div>
@@ -1151,8 +1151,8 @@ export function AutopostBatchFlow({
           </Card>
 
           <Card>
-            <div className="flex flex-wrap items-center gap-3 border-b border-line px-5 py-4">
-              <h2 className="text-[16px] font-extrabold tracking-[-0.02em]">going out</h2>
+            <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+              <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">going out</h2>
               <span className="text-[13.5px] text-ink-50">
                 {rows.length} post{rows.length === 1 ? "" : "s"}
               </span>
@@ -1247,14 +1247,14 @@ export function AutopostBatchFlow({
           the batch was several screens below the last thing anybody typed. the
           middle line is the running state of the step, which is also the
           sentence that explains a disabled next. */}
-      <div className="sticky bottom-3 z-10 mt-5 flex flex-wrap items-center gap-3 rounded-card border border-line bg-paper px-4 py-3 shadow-card">
+      <div className="sticky bottom-3 z-10 mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-paper px-3 py-2.5 shadow-[0_8px_24px_-16px_rgb(16_16_16/0.3)]">
         {step > 1 ? (
           <Ghost onClick={() => setStep((step - 1) as Step)}>← back</Ghost>
         ) : (
           <span className="hidden sm:block" />
         )}
 
-        <span className="text-[13.5px] font-semibold text-ink-50">
+        <span className="text-[12.5px] font-medium text-ink-50">
           {step === 1 &&
             (picked.length === 0
               ? "pick at least one clip"
@@ -1271,7 +1271,7 @@ export function AutopostBatchFlow({
           <button
             type="button"
             onClick={() => go((step + 1) as Step)}
-            className="ml-auto rounded-pill bg-flame px-6 py-2.5 text-[14px] font-extrabold text-on-accent transition-colors hover:bg-flame-dark"
+            className="ml-auto inline-flex h-8 items-center rounded-lg bg-flame px-4 text-[12.5px] font-semibold text-on-accent transition-colors hover:bg-flame-dark"
           >
             next →
           </button>
@@ -1280,7 +1280,7 @@ export function AutopostBatchFlow({
             type="button"
             onClick={confirm}
             disabled={busy || rows.length === 0}
-            className="ml-auto rounded-pill bg-flame px-6 py-2.5 text-[14px] font-extrabold text-on-accent transition-colors hover:bg-flame-dark disabled:bg-flame/40"
+            className="ml-auto inline-flex h-8 items-center rounded-lg bg-flame px-4 text-[12.5px] font-semibold text-on-accent transition-colors hover:bg-flame-dark disabled:bg-flame/40"
           >
             {busy
               ? "scheduling"
@@ -1322,7 +1322,7 @@ function FilePicker({
  *  header, a scrolling body and a footer that all line up. */
 function Card({ children }: { children: ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-card border border-line bg-paper shadow-card">
+    <section className="overflow-hidden rounded-xl border border-line bg-paper">
       {children}
     </section>
   );
@@ -1344,7 +1344,7 @@ function Ghost({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`rounded-pill border border-line bg-paper px-3.5 py-1.5 text-[13px] font-semibold text-ink-70 transition-colors hover:border-flame/45 hover:text-flame disabled:opacity-50 ${className}`}
+      className={`inline-flex h-8 items-center rounded-lg border border-line bg-paper px-3 text-[12.5px] font-semibold text-ink transition-colors hover:bg-shell disabled:opacity-50 ${className}`}
     >
       {children}
     </button>
@@ -1551,11 +1551,11 @@ function PlatformCard({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-card border border-line bg-paper shadow-card">
+    <section className="overflow-hidden rounded-xl border border-line bg-paper">
       <div className="h-[3px] w-full" style={{ background: PLATFORM_COLOR[platform] }} />
       <div className="flex items-center gap-2.5 border-b border-line px-5 py-3.5">
         <PlatformGlyph platform={platform} tone="brand" className="size-[22px]" />
-        <h2 className="text-[16px] font-extrabold tracking-[-0.02em]">
+        <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">
           {PLATFORM_LABEL[platform]}
         </h2>
       </div>
@@ -1761,8 +1761,8 @@ function UploadBox({
 }) {
   return (
     <div
-      className={`flex flex-col items-center justify-center rounded-xl border border-dashed px-5 py-7 text-center transition-colors ${
-        uploading ? "border-flame bg-ember" : "border-line bg-shell"
+      className={`flex flex-col items-center justify-center rounded-lg border border-dashed px-5 py-9 text-center transition-colors ${
+        uploading ? "border-flame bg-ember" : "border-line bg-shell/60 hover:bg-shell"
       }`}
     >
       {uploading ? (
@@ -1772,16 +1772,16 @@ function UploadBox({
       ) : (
         <>
           <UploadMark />
-          <p className="mt-2 text-[15px] font-bold tracking-[-0.01em]">
+          <p className="mt-2 text-[13.5px] font-semibold">
             drop cuts here
           </p>
-          <p className="mt-1 text-[13px] leading-[1.5] text-ink-50">
+          <p className="mt-0.5 text-[12px] text-ink-50">
             mp4 up to 200mb
           </p>
           <button
             type="button"
             onClick={onClick}
-            className="mt-3 rounded-pill bg-flame px-5 py-2 text-[13.5px] font-bold text-on-accent transition-colors hover:bg-flame-dark"
+            className="mt-3 inline-flex h-8 items-center rounded-lg border border-line bg-paper px-3 text-[12.5px] font-semibold transition-colors hover:bg-shell"
           >
             browse files
           </button>
@@ -1793,7 +1793,7 @@ function UploadBox({
 
 function UploadMark() {
   return (
-    <svg viewBox="0 0 24 24" className="size-6 text-flame" aria-hidden="true">
+    <svg viewBox="0 0 24 24" className="size-5 text-ink-50" aria-hidden="true">
       <path
         d="M12 16V4m0 0L8 8m4-4 4 4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"
         fill="none"

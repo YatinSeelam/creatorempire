@@ -9,7 +9,6 @@ import { AutopostCalendar } from "@/components/dash/autopost-calendar";
 import { BrandMark } from "@/components/dash/brand-mark";
 import { ConnectButton } from "@/components/dash/connect-button";
 import { PlatformGlyph } from "@/components/dash/platform-glyph";
-import { Crumbs, DashBar, column } from "@/components/dash/ui";
 import {
   DOW,
   addDays,
@@ -109,9 +108,9 @@ export function AutopostingWorkspace({
   if (!deal) {
     return (
       <>
-        <Bar />
-        <div className={`${column} pt-8`}>
-          <div className="mx-auto max-w-[520px] rounded-card border border-dashed border-line bg-shell px-8 py-14 text-center">
+        <div className="mx-auto w-full max-w-[1280px]">
+          <h1 className="text-[15px] font-bold tracking-[-0.01em]">scheduler</h1>
+          <div className="mx-auto mt-4 max-w-[520px] rounded-xl border border-line bg-paper px-8 py-14 text-center">
             {/* the four marks say what the tool is for faster than the heading
                 does, and greyed out they also say the honest thing: there is
                 nothing here to post from yet. */}
@@ -120,16 +119,16 @@ export function AutopostingWorkspace({
                 <PlatformGlyph key={p} platform={p} className="size-[22px]" />
               ))}
             </span>
-            <h2 className="mt-4 text-[17px] font-extrabold tracking-[-0.02em]">
+            <h2 className="mt-4 text-[13.5px] font-semibold">
               no brand deals yet
             </h2>
-            <p className="mx-auto mt-1.5 max-w-[400px] text-[14px] leading-[1.6] text-ink-50">
+            <p className="mx-auto mt-1 max-w-[400px] text-[12.5px] leading-[1.55] text-ink-50">
               autoposting goes out of the accounts on a brand deal. make a deal first,
               then connect its accounts.
             </p>
             <Link
               href="/deals/new"
-              className="mt-5 inline-flex items-center rounded-pill bg-flame px-5 py-2.5 text-[13.5px] font-bold text-on-accent transition-colors hover:bg-flame-dark"
+              className="mt-4 inline-flex h-8 items-center rounded-lg bg-flame px-4 text-[12.5px] font-semibold text-on-accent transition-colors hover:bg-flame-dark"
             >
               make a deal
             </Link>
@@ -141,27 +140,15 @@ export function AutopostingWorkspace({
 
   return (
     <>
-      <Bar
-        right={
-          <ScreenSwitch
-            value={screen}
-            onChange={setScreen}
-            options={[
-              { value: "flow", label: "new batch" },
-              { value: "calendar", label: "calendar" },
-            ]}
-          />
-        }
-      />
-
-      <div className={`${column} pb-16`}>
+      <div className="mx-auto w-full max-w-[1280px] pb-16">
         {/* Three things, three jobs: which brand, what it can post to, and the
             way to change that. They used to share one line with `ml-auto`
             deciding the gaps, which fell apart the moment a brand name ran
             long. The picker keeps its own width, the state sits next to it, and
             the button is pinned to the far end on a wide screen and wraps under
             on a narrow one. */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 pt-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+          <h1 className="mr-1 text-[15px] font-bold tracking-[-0.01em]">scheduler</h1>
           <div className="relative">
             <button
               type="button"
@@ -170,19 +157,19 @@ export function AutopostingWorkspace({
                 setPickerOpen((v) => !v);
                 setQuery("");
               }}
-              className={`flex w-full min-w-[260px] max-w-[380px] items-center gap-3 rounded-card border bg-paper py-2 pl-2 pr-3 text-left transition-colors sm:w-auto ${
+              className={`flex h-9 w-full min-w-[220px] max-w-[340px] items-center gap-2.5 rounded-lg border bg-paper pl-1.5 pr-2.5 text-left transition-colors sm:w-auto ${
                 pickerOpen
-                  ? "border-flame shadow-card"
-                  : "border-line hover:border-flame/45"
+                  ? "border-flame"
+                  : "border-line hover:bg-shell"
               }`}
             >
               <BrandMark name={deal.brandName} logo={deal.logo} size="sm" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14.5px] font-extrabold tracking-[-0.01em]">
+                <span className="block truncate text-[13px] font-semibold leading-tight">
                   {deal.brandName || deal.name}
                 </span>
                 {subLine(deal) && (
-                  <span className="block truncate text-[12px] font-semibold text-ink-50">
+                  <span className="block truncate text-[11px] leading-tight text-ink-50">
                     {subLine(deal)}
                   </span>
                 )}
@@ -198,7 +185,7 @@ export function AutopostingWorkspace({
                   className="fixed inset-0 z-20 cursor-default"
                   onClick={() => setPickerOpen(false)}
                 />
-                <div className="absolute left-0 top-[calc(100%+8px)] z-30 w-[340px] rounded-card border border-line bg-paper p-2 shadow-card">
+                <div className="absolute left-0 top-[calc(100%+8px)] z-30 w-[340px] rounded-xl border border-line bg-paper p-2 shadow-[0_12px_32px_-20px_rgb(16_16_16/0.4)]">
                   <div className="mb-1 flex items-center gap-2 rounded-pill bg-shell px-3 py-2">
                     <input
                       autoFocus
@@ -253,13 +240,21 @@ export function AutopostingWorkspace({
           <div className="flex min-w-0 items-center gap-3">
             <Connections connected={deal.connected} tracked={deal.tracked} />
             <span className="h-4 w-px shrink-0 bg-line" />
-            <span className="truncate text-[12.5px] font-semibold text-ink-50">
+            <span className="truncate text-[12px] text-ink-50">
               {deal.handle ? `@${deal.handle} · ` : ""}
               {deal.scheduled} scheduled
             </span>
           </div>
 
-          <div className="ml-auto shrink-0">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <ScreenSwitch
+              value={screen}
+              onChange={setScreen}
+              options={[
+                { value: "flow", label: "new batch" },
+                { value: "calendar", label: "calendar" },
+              ]}
+            />
             {!view.configured ? (
               <span className="text-[12.5px] text-ink-50">
                 posting is not switched on for this deploy
@@ -300,7 +295,7 @@ export function AutopostingWorkspace({
             </span>
           </div>
 
-          <div className="flex items-stretch overflow-hidden rounded-card border border-line bg-paper">
+          <div className="flex items-stretch overflow-hidden rounded-xl border border-line bg-paper">
             {weekBar.map((d) => (
               <div
                 key={d.key}
@@ -352,7 +347,7 @@ export function AutopostingWorkspace({
           </div>
         </div>
 
-        <div className="mt-5">
+        <div className="mt-4">
           {screen === "flow" && (
             <AutopostBatchFlow
               key={flowKey}
@@ -399,20 +394,6 @@ export function AutopostingWorkspace({
         </div>
       )}
     </>
-  );
-}
-
-function Bar({ right }: { right?: React.ReactNode }) {
-  return (
-    <DashBar
-      lead={
-        <Crumbs
-          size="lg"
-          trail={[{ label: "Tools", href: "/tools" }, { label: "Autoposting" }]}
-        />
-      }
-      right={right}
-    />
   );
 }
 
@@ -481,16 +462,16 @@ function ScreenSwitch<T extends string>({
   onChange: (value: T) => void;
 }) {
   return (
-    <div className="inline-flex shrink-0 rounded-pill border border-line bg-shell p-1">
+    <div className="inline-flex shrink-0 rounded-lg border border-line bg-shell p-0.5">
       {options.map((o) => (
         <button
           key={o.value}
           type="button"
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
-          className={`rounded-pill px-3.5 py-1.5 text-[13px] font-bold transition-colors ${
+          className={`h-7 rounded-md px-2.5 text-[12px] font-semibold transition-colors ${
             o.value === value
-              ? "bg-paper text-ink shadow-card"
+              ? "bg-paper text-ink shadow-[0_1px_2px_rgb(16_16_16/0.12)]"
               : "text-ink-50 hover:text-ink"
           }`}
         >

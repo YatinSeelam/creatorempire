@@ -79,7 +79,7 @@ export function ConnectButton({
   const skin =
     tone === "flame"
       ? "bg-flame text-on-accent hover:bg-flame-dark"
-      : "border border-line text-ink-70 hover:border-flame/45 hover:text-flame";
+      : "border border-line bg-paper text-ink hover:bg-shell";
 
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
@@ -87,7 +87,7 @@ export function ConnectButton({
         type="button"
         onClick={open}
         disabled={busy}
-        className={`h-9 shrink-0 rounded-pill px-4 text-[13.5px] font-semibold transition-colors disabled:opacity-60 ${skin}`}
+        className={`h-8 shrink-0 rounded-lg px-3 text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${skin}`}
       >
         {busy ? "Opening" : (label ?? (manage ? "Manage connections" : "Connect accounts"))}
       </button>
