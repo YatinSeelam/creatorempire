@@ -4,14 +4,14 @@
 
 -- 1. founder of the platform: reaches /founder, gets in with no seat.
 insert into public.admin_emails (email, role)
-values (lower('creatorempire11@gmail.com'), 'founder')
+values (lower('yatinsaireddyseelam@gmail.com'), 'founder')
 on conflict (email) do update set role = excluded.role;
 
 -- 2. the one workspace. the insert trigger writes the owner seat into org_members.
 insert into public.orgs (slug, name, owner_id)
 select 'creator-empire', 'creator empire', u.id
 from auth.users u
-where lower(u.email) = lower('creatorempire11@gmail.com')
+where lower(u.email) = lower('yatinsaireddyseelam@gmail.com')
 on conflict (slug) do nothing;
 
 -- 3. copy this id into NEXT_PUBLIC_CE_ORG_ID (.env.local + vercel), then restart.
