@@ -654,7 +654,7 @@ export function AutopostBatchFlow({
               </Ghost>
             </div>
 
-            <div className="divide-y divide-line/60">
+            <div className="space-y-2.5 p-4">
               {picked.map((id, i) => {
                 const clip = clipOf(id);
                 const caption = captions[id] ?? "";
@@ -666,16 +666,16 @@ export function AutopostBatchFlow({
                 const full = finalCaption(caption, tags, useTags);
                 const over = full.length > MAX_CAPTION;
                 return (
-                  <div key={id} className="flex gap-3 px-4 py-3">
+                  <div key={id} className="flex gap-3 rounded-lg border border-line bg-shell/40 p-3">
                     <div className="relative shrink-0">
                       <ClipThumb src={clip?.previewUrl ?? null} size="md" />
-                      <span className="absolute -left-1.5 -top-1.5 flex size-5 items-center justify-center rounded-md bg-ink text-[10px] font-extrabold text-paper">
+                      <span className="absolute -left-1 -top-1 flex size-4 items-center justify-center rounded-[4px] bg-ink text-[9px] font-bold text-paper">
                         {i + 1}
                       </span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="truncate text-[12.5px] font-semibold text-ink-50">
+                        <span className="truncate text-[12px] font-semibold">
                           {clip?.name}
                         </span>
                         <button
@@ -688,7 +688,7 @@ export function AutopostBatchFlow({
                               return next;
                             });
                           }}
-                          className="ml-auto shrink-0 text-[12.5px] font-semibold text-ink-50 transition-colors hover:text-ink"
+                          className="ml-auto shrink-0 text-[11.5px] font-medium text-ink-50 transition-colors hover:text-ink"
                         >
                           remove
                         </button>
@@ -701,11 +701,11 @@ export function AutopostBatchFlow({
                           setCaptions({ ...captions, [id]: e.target.value })
                         }
                         placeholder="what this one says"
-                        className="mt-1.5 w-full resize-none rounded-lg border border-line bg-paper px-3 py-2 text-[13px] leading-[1.5] outline-none focus:border-ink"
+                        className="mt-1.5 w-full max-w-[720px] resize-none rounded-md border border-line bg-paper px-3 py-2 text-[13px] leading-[1.5] outline-none focus:border-ink"
                       />
 
-                      <div className="mt-1.5 flex items-start gap-3">
-                        <p className="min-w-0 flex-1 text-[12px] leading-[1.5] text-ink-50">
+                      <div className="mt-1.5 flex max-w-[720px] items-start gap-3">
+                        <p className="min-w-0 flex-1 text-[11.5px] leading-[1.5] text-ink-50">
                           {full ? (
                             <>
                               <span className="font-bold uppercase tracking-[0.08em]">
@@ -718,7 +718,7 @@ export function AutopostBatchFlow({
                           )}
                         </p>
                         <span
-                          className={`shrink-0 text-[12px] font-bold ${
+                          className={`shrink-0 text-[11px] font-semibold tabular-nums ${
                             over ? "text-ink" : "text-ink-50"
                           }`}
                         >
@@ -1247,7 +1247,7 @@ export function AutopostBatchFlow({
           the batch was several screens below the last thing anybody typed. the
           middle line is the running state of the step, which is also the
           sentence that explains a disabled next. */}
-      <div className="sticky bottom-3 z-10 mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-paper px-3 py-2.5 shadow-[0_8px_24px_-16px_rgb(16_16_16/0.3)]">
+      <div className="sticky bottom-3 z-10 mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-paper px-4 py-2.5 shadow-[0_8px_24px_-16px_rgb(16_16_16/0.3)]">
         {step > 1 ? (
           <Ghost onClick={() => setStep((step - 1) as Step)}>← back</Ghost>
         ) : (
