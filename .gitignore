@@ -1,0 +1,68 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+# the worker is its own npm package inside this repo, so the root-anchored
+# pattern above misses it. without this, `git add -A` commits a few thousand
+# files of wrangler and its dependencies.
+node_modules/
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+# the one exception: names and comments, never values
+!.env.example
+# a pull of the vercel production env, dumped to a plain .txt so the .env*
+# pattern above misses it. it holds live values for SUPABASE_SECRET_KEY,
+# STRIPE_WEBHOOK_SECRET, CRON_SECRET and every api key, so one `git add -A`
+# would publish the whole product's credentials.
+prodenv.txt
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# finder duplicates. these appear as "route 2.ts" / "page 2.tsx" next to the
+# real file and are never wanted in a commit.
+*[ ]2.ts
+*[ ]2.tsx
+*[ ]2.sql
+*[ ]2.md
+
+# the audio library ingest's working dir: a gig of transcoded mp3 and zip packs
+# that live in storage, not here. scripts/audio-library.mjs rebuilds it.
+.audio-build/
+
+# supabase cli scratch
+supabase/.temp/
+# raw landing-art sources, live in figma/chatgpt, not the repo
+docs/landing-art-src/

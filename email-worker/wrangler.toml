@@ -1,0 +1,13 @@
+name = "ugcflows-inbound-email"
+main = "worker.js"
+
+# The "UGC Flows" cloudflare account. Pinned because this login also holds a
+# personal account, and wrangler cannot pick between two in a script. Not a
+# secret: an account id is an identifier, and every deploy needs it anyway.
+account_id = "7f5aeaa7eee14e7dd948a3893ea2b57b"
+compatibility_date = "2026-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets, set with `wrangler secret put` and never written here:
+#   INBOUND_WEBHOOK_URL   https://www.ugcflows.com/api/inbound-email
+#   INBOUND_EMAIL_SECRET  the same value as the app's env var

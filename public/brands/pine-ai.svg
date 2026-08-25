@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <rect width="256" height="256" fill="#F1F0E9"/>
+  <!-- green blob (P-like body with a tail at lower-left) -->
+  <path fill="#1F5A2E" d="M132 34
+    C92 34 62 64 62 112
+    C62 152 70 178 86 200
+    C99 218 92 230 110 227
+    C123 225 126 208 140 208
+    C184 208 198 168 198 114
+    C198 64 172 34 132 34 Z"/>
+  <!-- eyes -->
+  <ellipse cx="120" cy="116" rx="20" ry="23" fill="#FFFFFF"/>
+  <ellipse cx="162" cy="112" rx="20" ry="23" fill="#FFFFFF"/>
+  <circle cx="126" cy="120" r="8.5" fill="#14181C"/>
+  <circle cx="168" cy="116" r="8.5" fill="#14181C"/>
+</svg>

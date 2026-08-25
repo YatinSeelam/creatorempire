@@ -1,0 +1,16 @@
+{
+  "name": "ugcflows-inbound-email",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "postal-mime": "^2.4.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

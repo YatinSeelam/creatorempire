@@ -1,0 +1,418 @@
+@import "tailwindcss";
+
+/**
+ * A page that fits the viewport, from `lg` up.
+ *
+ * `<Page fill>` marks itself with `.page-fill` and this turns the shell's own
+ * `main` into the frame it fits inside: exactly one viewport tall, nothing to
+ * scroll, and the page a flex child of it. The height used to be
+ * `calc(100dvh - 113px)` on the page itself, where the 113 was the top bar and
+ * the gaps around it added up by hand — a number that drifts the moment a bar
+ * grows a pixel, and drifts into a window scrollbar sitting under a page that
+ * already scrolls its own lists.
+ *
+ * Deriving it instead of writing it down means the only scrollbars on these
+ * pages are the ones inside panels, which is the whole point of filling.
+ *
+ * The width half of the old condition stays: under 1024px this is a single
+ * column that cannot fit at any height. The height half is gone. It was there
+ * so a short window scrolled normally rather than reading its lists through a
+ * letterbox, but the letterbox never arrived and the window scrollbar it left
+ * behind on a 900px-tall screen is worse than the thing it avoided.
+ */
+@media (min-width: 1024px) {
+  main:has(.page-fill) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+  }
+}
+
+@theme {
+  --color-paper: #ffffff;
+  --color-shell: #f6f4f1;
+  --color-ink: #101010;
+  --color-ink-70: #3d3b38;
+  --color-ink-50: #6b6862;
+  --color-line: #e4e0d9;
+  --color-flame: #00008b;
+  --color-flame-dark: #000066;
+  --color-ember: #e9e9f6;
+  /* the app rail. a real orange tint, not the near-white ember used on cards */
+  --color-rail: #e7e9fb;
+  --color-rail-line: #cfd3f2;
+  /* what a label reads as ON the rail, and the wash a row gets on hover. Same
+   * story as --color-on-accent: the rail is a pale tint here and can be set to
+   * anything by a white-label org, so the nav labels and the account row in the
+   * bottom left corner cannot hardcode a dark grey. lib/org.ts flips both from
+   * the rail's own luminance. */
+  --color-on-rail: #35365a;
+  --color-on-rail-strong: #0d0d2b;
+  --color-rail-hover: #00008b14;
+  /* shadow under the active nav pill. a token so it follows the accent */
+  --color-glow: rgb(0 0 139 / 0.3);
+  /* what a label reads as ON the accent. White against this orange, and a token
+   * rather than a literal because a white-label org can set a pale brand colour
+   * and every primary button in the product would otherwise ship unreadable.
+   * lib/org.ts computes the flip from relative luminance. */
+  --color-on-accent: #ffffff;
+
+  /* a running deal's chip and a stat's week-over-week rise, and the only green
+   * in the product. A move DOWN borrows the ember/flame-dark pair the sync
+   * warning already uses, so there is no second red to keep in step with the
+   * first. deliberately not
+   * derived from the accent: "this one is live" has to stay green when a
+   * white-label org sets its brand colour, or the single state worth spotting
+   * down a column becomes whatever colour the client happened to pick. Muted
+   * enough to sit next to the flame without the two fighting. */
+  --color-live: #2c7a48;
+  --color-live-soft: #eaf5ed;
+  --color-live-line: #cbe5d3;
+
+  --font-sans: var(--font-raleway), ui-sans-serif, system-ui, sans-serif;
+
+  /* 22px read as a soft app widget on blocks this large. 14px still reads as a
+   * card and stops the corners from eating the content's alignment. */
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  /* The only lift a card gets. The shell is a warm off-white and the cards are
+   * pure white, so a hairline border alone leaves them sitting flat in it: the
+   * whole app read as one flat sheet with lines drawn on. This is deliberately
+   * small — a shadow you can point at is too big at this density, and the job is
+   * only to say the card is nearer than the page. Warm-tinted rather than grey,
+   * because a neutral shadow on a warm ground reads as dirt. */
+  --shadow-card: 0 1px 2px rgb(64 48 38 / 0.05), 0 1px 1px rgb(64 48 38 / 0.03);
+}
+
+/**
+ * Dark, and only inside the app.
+ *
+ * The tokens are redefined on `.dash-shell` — the wrapper both the creator
+ * dashboard and the editor side render — rather than on `:root`. That is what
+ * keeps the marketing pages the one design they were drawn as: a landing page
+ * is seen once, in whatever mood the page sets, and it is full of hand-picked
+ * colours that were never tokens. A tool is a thing somebody sits in for an
+ * hour at 1am.
+ *
+ * `light-dark()` rather than a second copy of the palette under a media query.
+ * The two values sit next to each other on one line, which is the only way nine
+ * greys stay in step with nine other greys; the duplicate-block version is one
+ * that eventually disagrees with itself in a way nobody notices until a border
+ * goes missing. `color-scheme` is what picks between them, so the three states
+ * are just three values of that one property — and setting it is required
+ * anyway, because the date and time inputs in the autoposting schedule are
+ * native controls that render as white slabs in a dark card without it.
+ *
+ * The attribute is written by the server off the theme cookie, so the first
+ * paint is already right. No script, no flash of white to hide behind one.
+ *
+ * NOT redefined: `--color-flame`, `--color-ember`, `--color-rail` and friends,
+ * which a white-label org sets as an inline style on this same element. An
+ * inline style beats a stylesheet rule, so a tenant's accent survives the
+ * switch, which is correct — it is their brand, not a grey. `railInk` in
+ * lib/org.ts already flips the rail's own text off its luminance, so a pale
+ * brand rail stays readable on a dark app.
+ */
+.dash-shell[data-theme="light"] {
+  color-scheme: light;
+}
+
+.dash-shell[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+.dash-shell[data-theme="system"] {
+  color-scheme: light dark;
+}
+
+.dash-shell[data-theme] {
+  /* `body` sets its colour from the ROOT ink, which is the light one — every
+   * element inside here that never names a colour of its own would otherwise
+   * inherit near-black through it and vanish on a dark card. the shell has to
+   * restate it in its own tokens for the inheritance chain to pick the theme
+   * up at all. */
+  color: var(--color-ink);
+
+  /*
+   * The dark side is the light side's STRUCTURE, not its inverse.
+   *
+   * What makes the light theme work is three surfaces and a hairline: a tinted
+   * rail, a warm off-white page, a card lifted off it, and a border you can
+   * actually see on every edge. The first cut of this got the colours roughly
+   * right and the structure wrong — the page and the card were four points of
+   * lightness apart and `line` was darker than either, so every card, every
+   * input and the rail's own edge dissolved into one brown sheet. Contrast
+   * between the SURFACES is what the eye reads, and on a dark ground almost all
+   * of it has to come from the border.
+   *
+   * So: the page drops further, the card lifts further, and `line` is the token
+   * that moved most — it is now lighter than the card it sits on, which is the
+   * exact opposite of what it is in the light theme and the only way a hairline
+   * reads at this end.
+   */
+  --color-paper: light-dark(#ffffff, #1b1b19);
+  --color-shell: light-dark(#f6f4f1, #0f0f0e);
+  --color-ink: light-dark(#101010, #f4f2ed);
+  --color-ink-70: light-dark(#3d3b38, #c9c4bb);
+  --color-ink-50: light-dark(#6b6862, #8d8880);
+  --color-line: light-dark(#e4e0d9, #36342f);
+
+  /* the accent itself holds: it is a mid orange and it reads on both grounds.
+   * what cannot hold is the pair around it. `flame-dark` is the hover, and
+   * going darker on a dark card is a hover that looks like a disabled state, so
+   * it goes lighter instead. `ember` is a near-white wash in the light theme
+   * and has to become a deep tint of the same hue rather than a pale one. */
+  --color-flame-dark: light-dark(#000066, #6b6bff);
+  --color-ember: light-dark(#e9e9f6, #0f0f33);
+
+  /* the rail keeps its job: a tinted panel, not a darker hole. peach at one end
+   * and a warm near-black at the other, both a step away from the page they sit
+   * against, both with an edge you can see. */
+  --color-rail: light-dark(#e7e9fb, #131322);
+  --color-rail-line: light-dark(#cfd3f2, #262640);
+  --color-on-rail: light-dark(#35365a, #c9c9e0);
+  --color-on-rail-strong: light-dark(#0d0d2b, #ffffff);
+  --color-rail-hover: light-dark(#00008b14, #ffffff14);
+
+  /* the one green. lifted and desaturated for the dark side: #2c7a48 on a
+   * near-black card is a smudge, and the whole job of this colour is being
+   * spotted down a column. */
+  --color-live: light-dark(#2c7a48, #4fb477);
+  --color-live-soft: light-dark(#eaf5ed, #16291e);
+  --color-live-line: light-dark(#cbe5d3, #2a4634);
+}
+
+/* the two that `light-dark()` cannot carry: it takes colours, and these are a
+ * shadow list and a colour with an alpha baked into a token name. */
+.dash-shell[data-theme="dark"],
+.dash-shell[data-theme="system"] {
+  /* a shadow does almost nothing on a near-black ground, so the border above is
+   * what says "nearer" and this only stops the card floating. the glow under
+   * the active nav pill comes down hard: at 0.35 it was a halo. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.5);
+  --color-glow: rgb(0 0 139 / 0.22);
+}
+
+@media (prefers-color-scheme: light) {
+  /* `system` on a light machine keeps the warm shadow it always had. the colour
+   * tokens above need no equivalent: `light-dark()` has already picked. */
+  .dash-shell[data-theme="system"] {
+    --shadow-card: 0 1px 2px rgb(64 48 38 / 0.05), 0 1px 1px rgb(64 48 38 / 0.03);
+    --color-glow: rgb(0 0 139 / 0.3);
+  }
+}
+
+:root {
+  color-scheme: light;
+
+  /* Where a page's body starts, measured from the top of the window: DashBar's
+   * 56px minimum plus the 28px of `mb-7` under it. Anything pinned alongside
+   * that body measures from here — Split's sticky aside and the portfolio's
+   * preview well — so the bar's height moves in one place instead of three.
+   * Not a @theme token: it is a layout measurement, not something a white-label
+   * org gets to repaint. */
+  --bar-offset: 84px;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-flame);
+  color: #fff;
+}
+
+/* faint drafting grid, borrowed from the planning boards this product came out of */
+.dash-shell[data-theme="dark"] .grid-paper,
+.dash-shell[data-theme="system"] .grid-paper {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+@media (prefers-color-scheme: light) {
+  .dash-shell[data-theme="system"] .grid-paper {
+    background-image:
+      linear-gradient(to right, rgba(16, 16, 16, 0.05) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(16, 16, 16, 0.05) 1px, transparent 1px);
+  }
+}
+
+.grid-paper {
+  background-image:
+    linear-gradient(to right, rgba(16, 16, 16, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(16, 16, 16, 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+  background-position: center top;
+}
+
+/* A pool of grid behind the headline, gone by the time it reaches any edge.
+ *
+ * This used to be a top-to-bottom linear fade, which meant the grid ran the
+ * full width of the page and died at a horizontal line partway down — it read
+ * as a background that had been cut off rather than one that belonged to the
+ * text. The ellipse is centred on the headline (36% down, where the h1 sits
+ * once the nav and eyebrow are above it) and falls off in every direction, so
+ * the texture reads as something the words are sitting on.
+ *
+ * Percentages, not pixels, so it tracks the hero at every viewport instead of
+ * needing a breakpoint per size. */
+.grid-paper-fade {
+  mask-image: radial-gradient(
+    ellipse 42% 32% at 50% 36%,
+    #000 0%,
+    rgba(0, 0, 0, 0.9) 42%,
+    transparent 100%
+  );
+}
+
+.text-balance-tight {
+  text-wrap: balance;
+}
+
+/* The window's own scrollbar, hidden on the dashboard only. The app is a tinted
+ * rail against a shell and a native track down the right edge cuts across it.
+ * Scoped with :has() off .dash-shell in app/(dash)/layout.tsx, because the
+ * scrollbar belongs to the root element and no child can reach it — the landing
+ * page keeps its bar. */
+html:has(.dash-shell) {
+  scrollbar-width: none;
+}
+
+html:has(.dash-shell)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* Scrolls, shows no bar. For panes inside the app chrome (the portfolio form
+ * column, the phone preview) where a track running down the middle of the
+ * layout reads as a seam. Never use it on the page itself. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* The one animation on the landing page: a panel rising a few pixels as it
+ * arrives. Used by the showcase band, whose panel is keyed on the active tab,
+ * so switching tabs remounts it and replays this. Short and small on purpose —
+ * a long travel reads as the layout settling rather than as a response to the
+ * click that caused it. */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.fade-up {
+  animation: fade-up 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  /* the tab still swaps, it just does not travel to get there. */
+  .fade-up {
+    animation: none;
+  }
+}
+
+/* The caption faces the variations tool burns into a render.
+ *
+ * These are the SAME .ttf files the render worker registers on its canvas, off
+ * the same /public/fonts folder. That is the whole reason they are declared by
+ * hand instead of pulled from a font service: the style editor's preview and
+ * the finished mp4 have to be the same drawing, and two sources for one
+ * typeface is how a preview quietly stops matching the thing it previews.
+ *
+ * font-display: block, not swap. A hook drawn in the fallback for 100ms and
+ * then re-laid-out in the real face reads as the text jumping, and this text is
+ * being positioned by hand to the pixel. */
+@font-face {
+  font-family: "TikTok Sans";
+  src: url("/fonts/TikTokSans-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("/fonts/SourceSans3-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 SemiBold";
+  src: url("/fonts/SourceSans3-Semibold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("/fonts/Montserrat-ExtraBold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/Inter-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Poppins";
+  src: url("/fonts/Poppins-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Anton";
+  src: url("/fonts/Anton-Regular.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Courier Prime";
+  src: url("/fonts/CourierPrime-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Permanent Marker";
+  src: url("/fonts/PermanentMarker-Regular.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "DM Serif Display";
+  src: url("/fonts/DMSerifDisplay-Regular.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}
+@font-face {
+  font-family: "Luckiest Guy";
+  src: url("/fonts/LuckiestGuy-Regular.ttf") format("truetype");
+  font-weight: 700;
+  font-display: block;
+}

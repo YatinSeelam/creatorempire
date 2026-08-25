@@ -1,0 +1,25 @@
+2026-08-25  own supabase project + google only door
+- creator empire now runs on its OWN supabase project (xgiifxrxmtyklwglpewb). supabase/bootstrap/ holds the schema bundle: 00_prelude.sql (hand written base: private schema, admin_emails, profiles + signup trigger, subscriptions), 01..05 = the 80 migrations concatenated, 99_seed.sql (founder row + creator-empire org, then copy the org id into NEXT_PUBLIC_CE_ORG_ID). AUDIT.md lists what was checked. nothing applied yet: needs the mcp authed.
+- sign in is google only: components/auth-form.tsx is one button, /sign-up redirects to /login, /auth/callback and the proxy's stray-code forward land on /dashboard. /account is no longer a price page: it says "not on the roster" (or "no workspace configured" while CE_ORG_ID is empty) and offers sign out. it redirects anyone entitled to /dashboard, so it and requireViewer cannot loop.
+- lib/editing.ts EDITING_ENABLED = true (the editing desk 404'd for every non founder). /editing and /notifications added to PROTECTED in lib/supabase/proxy.ts; /editors left out because its layout renders a signed out state itself.
+- vercel.json now runs /api/cron/refresh hourly: nobody else drains this project's queue. .env.local: duplicate ugcflows block removed (backup in .env.local.bak), site url is :3000 (next's default, was :3100), APIFY_API_KEY renamed to APIFY_TOKEN (the name the code reads), SUPABASE_SECRET_KEY + CRON_SECRET placeholders added.
+- CLAUDE.md + README rewritten where they said "same supabase project as ugc flows".
+
+2026-08-25  creator empire dashboard rebuilt: welcome bar with get an edit / new post, creator overview head with create deal, performance overview bar with 7d/14d/30d/90d/all chips (14d + 90d ranges added to earnings-range + loadEarnings), five stat tiles (earned final/accruing, views + attributed posts, connected accounts, content pipeline, scheduled posts), 14 day trend chart (inline svg, edit requests + posts), needs attention list (untracked deals, cuts waiting, failed posts, payouts due), deal performance table with views/posts/earned per deal. new read `loadOverview` in lib/dash-server.ts. the shortcut doors and any editor queue block are gone.
+2026-08-25  creator empire: google drive picker hard-removed (drive-picker.tsx, lib/variations/drive.ts, the NEXT_PUBLIC_GOOGLE_* vars). uploads go to supabase storage; a drive url can still be pasted as a link.
+2026-08-25  creator empire dashboard: editing queue panel gone, three shortcut doors (add a deal, schedule posts, send a cut) under the stats, deals panel full width, greeting shortened. SUBSCRIPTIONS.md lists every paid service the deploy needs.
+2026-08-25  creator empire: settings is profile + account only. edit jobs read is scoped to the programme books (a job on a personal ugc flows deal no longer shows here; a job with no deal yet still does).
+2026-08-25  creator empire: owner/admin rail carries the work rows (dashboard, deals, scheduler, editing) above the programme rows; layout no longer bounces them to /agency.
+2026-08-25  creator empire rail: pale navy tint (#e7e9fb) with dark ink, active row solid navy on white, same shape as the ugc flows orange rail.
+2026-08-25  creator empire trimmed to the programme: rail is dashboard / deals / scheduler / editing for a student, students / invites & roles for owner+admin, founder + settings at the foot. no tools shelf, branding, modules, flow, campaigns, portfolio, sections toggles or billing tab, routes and orphan components deleted. crown logo in public/logo.png + app/icon.png, rail navy with white text and white active row from globals.css (org colours no longer read). per student cost column on /agency (MemberUsage.micros). owner can change a seat's role (setMemberRole, policy org_members_owner_update applied in the shared db).
+2026-08-25  creator empire: stripped the multi-tenant leftovers so next build passes clean
+  deleted components/lowticket, components/mentorships, components/students, lib/content-students.ts,
+  app/checkout, app/r, app/(dash)/earn, app/(dash)/perks, app/(dash)/new, lib/earn*.ts, lib/perks.ts,
+  components/dash/earn-workspace.tsx. stripe webhook keeps billing, drops the referral commission hooks.
+  auth callback and proxy no longer set or read the ref cookie. createOrg and NEW_HREF are gone,
+  requireAgency sends to /dashboard. rail lost earn/perks/docs rows, account menu lost add account,
+  switcher lost create a workspace, account page lost the /new pitch. sitemap only lists live routes.
+  swept user-facing ugcflows urls and strings to creatorempire.app; lib/org.ts host checks and
+  account-emails default domain left as technical identifiers.
+
+2026-08-25  cut from the ugc flows repo at 831aef0. one workspace (NEXT_PUBLIC_CE_ORG_ID), navy palette, no marketing, no crons. see README.md.

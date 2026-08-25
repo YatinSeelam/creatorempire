@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" width="1200" height="1200">
+  <defs>
+    <linearGradient id="lpBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9061F0"/>
+      <stop offset="1" stop-color="#7A43DB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#lpBg)"/>
+  <g fill="none" stroke="#EDE8FB" stroke-width="74" stroke-linecap="round" stroke-linejoin="round">
+    <!-- arc swoosh, upper-right -->
+    <path d="M470 300 A430 430 0 0 1 905 815"/>
+    <!-- outlined paper plane / send arrow -->
+    <path d="M250 560 L735 600 L520 955 L455 745 Z"/>
+  </g>
+</svg>
