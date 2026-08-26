@@ -3,7 +3,7 @@
  *
  * The idea in one line: the person who actually signs off on a cut is the
  * creator's campaign manager, and they will never have a login here. So a job
- * gets one opaque url, `ugcflows.com/review/<token>`, and whoever holds it can
+ * gets one opaque url, `creatorempire.app/review/<token>`, and whoever holds it can
  * watch the cuts and say approve or changes.
  *
  * A verdict is a signal, not a command. Approving still happens in the

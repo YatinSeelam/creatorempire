@@ -105,7 +105,7 @@ export async function loadEditJobs(): Promise<EditJobListRow[]> {
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
 
-  // this deploy is one workspace, and a login is shared with ugc flows. a job
+  // this deploy is one workspace, and a login is its own. a job
   // on a deal from somebody's personal books does not belong on this screen.
   // a job with no deal yet stays, because that is what the wizard makes first.
   const scope = await dealScope();

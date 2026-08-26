@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Raleway } from "next/font/google";
-import { brand, dealRate, pricing } from "@/lib/content";
+import { brand } from "@/lib/content";
 import { SITE_URL } from "@/lib/site-url";
 import "./globals.css";
 
@@ -12,65 +12,35 @@ const raleway = Raleway({
 });
 
 // The one public origin lives in lib/site-url.ts (NEXT_PUBLIC_SITE_URL, else
-// vercel's production host, else localhost) so the sitemap, robots, canonicals
-// and og tags all print the same host.
+// vercel's production host, else localhost) so canonicals and links all print
+// the same host.
 const siteUrl = SITE_URL;
 
-// Read from content.ts rather than written out again. This string is the one
-// that ends up in search results and link previews, and the hardcoded copy had
-// gone stale: it still said "$750 to $1,000" months after the offer became a
-// $750 FLOOR with no cap, which is the weaker of the two claims.
-//
-// Title order is keyword, promise, brand: "UGC brand deals" is what a creator
-// types into google, the guarantee is the reason to click, and the brand is a
-// suffix nobody searches for yet. Under 60 characters so it is never cut.
-const title = `UGC brand deals in 30 days, or your ${pricing.price} back | ${brand.name}`;
-const description = `${pricing.price} a month puts UGC creators in front of brands paying ${dealRate.label} a deal, and runs the deals, the money, the posting and the editors in one app. Do not make it back in 30 days and we refund you.`;
-
+/**
+ * This deploy has no marketing site and no public page.
+ *
+ * `/` redirects to the dashboard and every route behind it wants a seat on the
+ * roster, so the title is the product's name and nothing else. It used to carry
+ * the ugc flows offer — a price, a guarantee and a keyword list for a signup
+ * page that does not exist here — which is what a browser tab, a bookmark and
+ * every link preview were printing.
+ *
+ * `robots: false` for the same reason. There is nothing here for a crawler to
+ * index, and an invite-only workspace showing up in search results is a leak
+ * rather than a win.
+ */
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title,
-  description,
+  title: brand.name,
+  description: `${brand.name} runs brand deals, the money, the posting and the editing in one place.`,
   applicationName: brand.name,
-  keywords: [
-    "ugc brand deals",
-    "ugc creator",
-    "how to get ugc brand deals",
-    "ugc mentorship",
-    "ugc coaching",
-    "ugc agency for creators",
-    "ugc rates",
-    "paid brand deals",
-    "ugc community",
-  ],
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      "max-image-preview": "large",
-      "max-snippet": -1,
-      "max-video-preview": -1,
-    },
-  },
+  robots: { index: false, follow: false, nocache: true },
   openGraph: {
-    title,
-    description,
+    title: brand.name,
     url: siteUrl,
     siteName: brand.name,
     type: "website",
     locale: "en_US",
-    // public/og.png is 1200x630 and says the offer. rendered once by
-    // scripts/og-image.mjs, not at request time; the square logo it replaced
-    // was cropped by every preview card. pages under this inherit it.
-    images: [{ url: "/og.png", width: 1200, height: 630, alt: title }],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title,
-    description,
-    images: ["/og.png"],
   },
 };
 

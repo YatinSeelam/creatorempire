@@ -11,6 +11,8 @@
  * one accent colour and a logo. See `themeVars` for why it is only one.
  */
 
+import { SITE_URL } from "@/lib/site-url";
+
 /**
  * The whole white-label layer, off. Hidden rather than deleted, the same way
  * the editing market is: the tables, the policies, /agency, the invite flow and
@@ -469,39 +471,35 @@ function railInk(rail: string): Record<string, string> {
   };
 }
 
-/**
- * The org a hostname belongs to: `acme.ugcflows.com` → `acme`.
+/** The domain tenants would be subdomains of: this deploy's own apex.
  *
- * Returns null for the product's own hosts, so ugcflows.com and a preview
- * deployment never accidentally resolve to a tenant. A custom domain is not
- * handled here — it has no slug in it, so it is a table lookup.
- */
-const OWN_HOSTS = new Set(["ugcflows.com", "www.ugcflows.com", "localhost"]);
-
-/** The domain tenants are subdomains of. */
-export const TENANT_ROOT = "ugcflows.com";
+ *  Read off SITE_URL rather than typed out. It was hardcoded to ugcflows.com,
+ *  a different product on a different vercel project, so every address this
+ *  file printed on a /founder page named a host this deploy does not answer on. */
+export const TENANT_ROOT = new URL(SITE_URL).hostname.replace(/^www\./, "");
 
 /** Where everything lives until a tenant has an address of its own. */
-export const PRODUCT_HOST = "www.ugcflows.com";
+export const PRODUCT_HOST = new URL(SITE_URL).hostname;
+
+const OWN_HOSTS = new Set([TENANT_ROOT, PRODUCT_HOST, "localhost"]);
 
 /**
- * Whether `<slug>.ugcflows.com` actually answers in production.
+ * Whether `<slug>.<TENANT_ROOT>` actually answers in production.
  *
- * It does not yet: there is no `*.ugcflows.com` record at cloudflare and the
- * wildcard is not attached to the vercel project, so every address this file
- * built (`https://klypr.ugcflows.com/join/…`) resolved to nothing. An invite
- * link that does not open is worse than one on the product's own host, so
- * until this is true the tenant address falls back to PRODUCT_HOST everywhere
- * except a dev machine, where `<slug>.localhost` needs no dns at all.
- *
- * To flip it: cloudflare → dns → `*` CNAME `cname.vercel-dns.com` (dns only),
- * vercel → ugcflows project → domains → add `*.ugcflows.com`, then set this
- * true. `/join` and the accept flow work on either host either way; what the
- * flag changes is which host the links are minted on and whether the login
- * page wears the agency's paint on the way in.
+ * It does not, and on this deploy it is not meant to: there is one workspace
+ * here and no tenant host lookup at all (see CLAUDE.md). The flag stays so a
+ * screen copied over from ugc flows still compiles, and stays false so every
+ * link is minted on the host this project actually serves.
  */
 export const TENANT_SUBDOMAINS_LIVE = false;
 
+/**
+ * The org a hostname belongs to: `acme.creatorempire.app` → `acme`.
+ *
+ * Returns null for the product's own hosts, so the apex and a preview
+ * deployment never accidentally resolve to a tenant. A custom domain is not
+ * handled here — it has no slug in it, so it is a table lookup.
+ */
 export function slugFromHost(host: string | null): string | null {
   if (!host) return null;
   const name = host.split(":")[0].toLowerCase();
@@ -528,7 +526,7 @@ export function slugFromHost(host: string | null): string | null {
  *
  * Derived from the host of the request asking rather than hardcoded, so the
  * address shown on the branding page is one that actually opens: `acme.localhost:3000`
- * in dev, `acme.ugcflows.com` in production. A custom domain wins over both,
+ * in dev, `acme.creatorempire.app` in production. A custom domain wins over both,
  * because once it is set it IS the address.
  *
  * A preview deployment is the one case with no answer — you cannot put a
@@ -592,7 +590,7 @@ export function toSlug(raw: string): string {
 /**
  * Subdomains nobody may claim as a workspace address.
  *
- * A slug becomes `<slug>.ugcflows.com` the moment the wildcard resolves, so an
+ * A slug becomes `<slug>.creatorempire.app` the moment the wildcard resolves, so an
  * org named "www" would sit on the product's own front door and one named
  * "mail" or "api" would shadow infrastructure. Checked at create time rather
  * than in DNS, because by DNS time the row already exists. Lives here rather
@@ -634,9 +632,7 @@ export const RESERVED_SLUGS = new Set([
   "signup",
   "join",
   "ugcflows",
-  // the b2b landing page these customers arrive through
-  "mentorship",
-  "mentorships",
+  "creatorempire",
 ]);
 
 /**
@@ -655,7 +651,7 @@ export function slugProblem(slug: string): string | null {
 /**
  * A custom domain we could plausibly serve, lowercased, or null for "clear it".
  * Returns a message when the value cannot be stored: our own hosts, because a
- * tenant naming `www.ugcflows.com` or another agency's subdomain as its domain
+ * tenant naming the product's own host or another agency's subdomain as its domain
  * would win the host lookup for everyone arriving there; and anything that is
  * not shaped like a hostname, because a value with a scheme or a path in it is
  * a tenant that never resolves and nobody can see why.
@@ -711,7 +707,7 @@ export function inviteLink(
   //
   // minted on the agency's OWN address, so the whole journey — the invite,
   // the login it bounces through, the dashboard it lands on — happens under
-  // the agency's name. the auth cookie is scoped to `.ugcflows.com`
+  // the agency's name. the auth cookie is scoped to the deploy's own apex
   // (lib/supabase/cookie-domain.ts), which is what makes that one journey
   // instead of a second sign-in.
   return `${tenantUrl(org, requestHost)}/join/${token}`;

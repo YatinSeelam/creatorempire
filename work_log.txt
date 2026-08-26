@@ -1,3 +1,67 @@
+2026-08-26 — strip ugc flows out of creator empire
+
+the browser tab said "UGC brand deals in 30 days, or your $500 back". that was
+app/layout.tsx reading the ugc flows offer out of lib/content.ts, and it turned
+out to be one of about forty places.
+
+identity and seo
+- app/layout.tsx: title is the product's name, nothing else. no keyword list, no
+  price, no guarantee, no og image. robots noindex/nofollow: `/` redirects to
+  the dashboard and everything behind it wants a seat, so there is nothing here
+  for a crawler and an invite-only roster in search results is a leak.
+- app/robots.ts: disallow everything. it was open with private prefixes carved
+  out, which is right for a marketing site and wrong for this.
+- deleted app/sitemap.ts (listed /, /sign-up, /editors and portfolios, most of
+  them 404s here), public/llms.txt (a ugcflows.com pitch written for ai
+  crawlers), public/og.png and scripts/og-image.mjs (both drew the offer).
+
+the landing page, which this deploy never served
+- deleted components: hero, hero-shot, offer, offer-icons, offer-shots,
+  core-offers, fit, guarantee, testimonials, faq, final-cta, promo-bar,
+  site-nav, site-footer, section, ui, json-ld. every one was unreachable: `/`
+  redirects to /dashboard.
+- lib/content.ts went from 1140 lines to 245. what is left is brand, support and
+  the two legal documents. gone: pricing, dealRate, capacity, plans, coreOffers,
+  offer, guarantee, finalCta, hero, signup, testimonials, faq, navLinks,
+  footerNav, socials, account.
+- deleted lib/seo.ts and lib/content-mentorships.ts, both pure ugc flows
+  marketing. trimmed components/art.tsx to the glyph set and the mark.
+- deleted public/landing, public/testimonials and public/flow.
+
+legal, which was describing a different product
+- terms sold a $500 a month subscription with a card on file, a cancel button
+  and a 30 day money back guarantee, plus sections on brand campaigns we place
+  you into. none of that is true here: access is a seat a programme grants and
+  takes away, and nobody is charged. rewritten around that, with an explicit
+  "whatever you pay your programme is between you and them".
+- privacy lost the billing and card sections and gained the ones that describe
+  what this app actually does: what the programme running your workspace can
+  see, that a handoff link is a capability anyone holding it can open, and that
+  texts are collected and switched off.
+- both need a lawyer's eye. flagged, not claimed.
+- components/legal-page.tsx: the marketing nav and footer went with the landing
+  page. its footer linked to Pricing, Reviews, FAQ and two mentorship pages,
+  all 404 here. now the mark, the words, and one way back into the app.
+
+strings and hosts
+- "ugc flows" in things people actually read: the /editors and /e page titles,
+  the paypal payout description and email subject, the resend email footer, the
+  agency invite email, and the editor 404's back link.
+- lib/org.ts TENANT_ROOT and PRODUCT_HOST were hardcoded to ugcflows.com, so
+  every address a /founder page printed named a host this deploy does not answer
+  on. both derive from SITE_URL now. reserved slugs gained creatorempire.
+- lib/supabase/cookie-domain.ts widened the auth cookie only for ugcflows.com,
+  so it never fired here. it derives the apex from SITE_URL now, with a guard
+  that refuses to widen onto a public suffix: a cookie scoped to `.vercel.app`
+  is refused by every browser and the session vanishes with no error.
+- README and SUBSCRIPTIONS still said the database and the cron were shared with
+  ugc flows. neither has been true since 2026-08-25, and vercel.json has run the
+  hourly cron here since. corrected.
+
+tsc clean, build clean, eslint 0 errors. verified over http: /terms and /privacy
+carry no offer copy, robots.txt is disallow all, /sitemap.xml and /llms.txt are
+404, and every page title is now "Creator Empire".
+
 2026-08-26 — dashboard: what the month lands on, and eight accuracy fixes behind it
 
 the ask: show a projection of end-of-month earnings including bonuses, organised well.

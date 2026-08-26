@@ -261,7 +261,7 @@ export function emptyPortfolio(seed?: {
 /**
  * Routes that already exist, plus the ones worth keeping free.
  *
- * The public portfolio lives at the root — `ugcflows.com/yourhandle` — because
+ * The public portfolio lives at the root — `creatorempire.app/yourhandle` — because
  * that is the address people actually hand out. A static route always beats a
  * dynamic one in Next, so `/login` is safe either way, but a creator who claims
  * "login" would still get a page they can never reach, and one who claims "api"

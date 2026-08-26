@@ -116,7 +116,7 @@ function BrandMarkGlyph({
               of the rect and every stop but one falls off the end, which is why
               the mark drew as one flat orange instead of the gradient. */}
           <linearGradient
-            id="ugcflows-ig-mark"
+            id="ce-ig-mark"
             gradientUnits="userSpaceOnUse"
             x1="3.5"
             y1="21.5"
@@ -130,7 +130,7 @@ function BrandMarkGlyph({
             <stop offset="1" stopColor="#5B51D8" />
           </linearGradient>
         </defs>
-        <rect x="2" y="2" width="20" height="20" rx="5.8" fill="url(#ugcflows-ig-mark)" />
+        <rect x="2" y="2" width="20" height="20" rx="5.8" fill="url(#ce-ig-mark)" />
         <circle cx="12" cy="12" r="4.6" fill="none" stroke="#fff" strokeWidth="1.9" />
         <circle cx="17.6" cy="6.5" r="1.15" fill="#fff" />
       </svg>

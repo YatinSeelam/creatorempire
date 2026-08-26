@@ -109,7 +109,7 @@ export async function sendPayout(input: {
       body: JSON.stringify({
         sender_batch_header: {
           sender_batch_id: input.senderBatchId,
-          email_subject: "you got paid, ugc flows",
+          email_subject: "you got paid, creator empire",
           email_message: input.note.slice(0, 400),
         },
         items: [

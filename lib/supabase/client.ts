@@ -3,7 +3,7 @@ import { authCookieDomain } from "@/lib/supabase/cookie-domain";
 
 /** Supabase client for client components. Reads the session from cookies. */
 export function createClient() {
-  // scoped to `.ugcflows.com` on production hosts so the session a tenant
+  // scoped to `.creatorempire.app` on production hosts so the session a tenant
   // subdomain writes is the same one www reads, matching the proxy exactly.
   const domain =
     typeof window === "undefined"

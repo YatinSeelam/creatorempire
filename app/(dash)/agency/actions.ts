@@ -396,7 +396,7 @@ export async function inviteMember(form: FormData) {
       html: notificationHtml({
         heading: `you're invited to ${org.name}`,
         lines: [
-          `${org.name} runs their creators on ugc flows and made you a ${ROLE_LABEL[role].toLowerCase()} seat.`,
+          `${org.name} runs their creators on creator empire and made you a ${ROLE_LABEL[role].toLowerCase()} seat.`,
           "sign in with this exact email address, or create an account on it, and press join. your deals stay yours either way.",
           "the link works for 14 days.",
         ],

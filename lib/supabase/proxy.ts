@@ -80,8 +80,8 @@ const AUTH_ENTRY = ["/login", "/sign-up", "/join", "/auth"];
 /**
  * Stale host-only session cookies, and why the proxy deletes them.
  *
- * The auth cookies were widened from host-only (`www.ugcflows.com`) to
- * `.ugcflows.com` so one sign-in covers the product and every tenant
+ * The auth cookies were widened from host-only (`www.creatorempire.app`) to
+ * `.creatorempire.app` so one sign-in covers the product and every tenant
  * subdomain. A browser that signed in before that still holds the host-only
  * copies, and nothing ever removes them: a Set-Cookie with a Domain attribute
  * is a different cookie from one without, so every refresh, sign-out and
@@ -102,7 +102,7 @@ const AUTH_ENTRY = ["/login", "/sign-up", "/join", "/auth"];
  *
  * The fix is a host-only deletion: `Set-Cookie: <name>=; Max-Age=0; Path=/`
  * with NO Domain attribute deletes exactly the host-only cookie and leaves the
- * `.ugcflows.com` one alone. Safe to send when there is nothing to delete.
+ * `.creatorempire.app` one alone. Safe to send when there is nothing to delete.
  * Only on hosts where the app writes domain-wide cookies (`authCookieDomain`
  * returns one), because on localhost and previews host-only IS the real
  * session and deleting it would sign everybody out on every request.
@@ -156,7 +156,7 @@ function purgeStaleHostOnlyCookies(
  * this deploy is pointed at.
  *
  * supabase-js names its cookies after the first label of the api host, so the
- * same project reached at auth.ugcflows.com and at
+ * same project reached at auth.creatorempire.app and at
  * qtcwdvaoxrfojzaktwyg.supabase.co writes `sb-auth-*` and
  * `sb-qtcwdvaoxrfojzaktwyg-*`. Move an environment between the two — which is
  * exactly what `.env` and `.env.local` disagreeing does on a dev machine — and
@@ -241,7 +241,7 @@ export async function updateSession(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // a tenant host's front door is the dashboard, not the product's marketing
-  // page: klypr.ugcflows.com belongs to klypr, and showing our landing page on
+  // page: acme.creatorempire.app belongs to klypr, and showing our landing page on
   // their address is the one thing a white label must never do. A stranger
   // bounces off the /dashboard entry below into /login, on the tenant host,
   // where the login paints the tenant's own name.

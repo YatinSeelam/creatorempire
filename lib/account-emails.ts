@@ -83,7 +83,7 @@ export const ACCOUNT_CODE_COLUMNS =
  * signup form has ever cared that an address had a dot more in it.
  */
 export function accountEmailDomain(): string {
-  return (process.env.ACCOUNT_EMAIL_DOMAIN || "accounts.ugcflows.com")
+  return (process.env.ACCOUNT_EMAIL_DOMAIN || "accounts.creatorempire.app")
     .trim()
     .toLowerCase()
     .replace(/^@/, "");

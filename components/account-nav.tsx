@@ -1,20 +1,14 @@
 import Link from "next/link";
-import { account, brand } from "@/lib/content";
+import { brand } from "@/lib/content";
 import { Mark } from "./art";
 
 /**
  * The header for signed-in pages.
  *
- * Its LINKS are different from the landing nav — there is nothing to sell
- * somebody who already has an account, so the sections dropdown and the buy
- * button are gone. Everything else is deliberately identical: the same
- * 58/62px bar, the same 1120 max width, the same 5/6 gutters, the same
- * wordmark size, the same quiet-until-hovered `transition-colors` on every
- * link. Walking from the landing page into the account page should not feel
- * like walking into a different site, and the bar is the one element on screen
- * in both places.
- *
- * If site-nav's shell measurements change, change them here in the same pass.
+ * The only bar left outside the dashboard. It used to be one of a pair, held
+ * pixel for pixel in step with the landing page's nav so walking from one to
+ * the other did not feel like changing sites. There is no landing page now, so
+ * there is nothing to stay in step with: the mark, the wordmark and sign out.
  */
 export function AccountNav({ showDashboard = false }: { showDashboard?: boolean }) {
   return (
@@ -47,7 +41,7 @@ export function AccountNav({ showDashboard = false }: { showDashboard?: boolean 
               type="submit"
               className="flex min-h-[44px] items-center text-sm font-semibold text-ink-70 transition-colors hover:text-ink"
             >
-              {account.signOut}
+              Sign out
             </button>
           </form>
         </nav>

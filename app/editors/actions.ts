@@ -984,7 +984,7 @@ export async function requestPayout(
       amountCents: batch.amount_cents,
       destination: batch.address,
       idempotencyKey: batch.batch_id,
-      description: "ugc flows editing payout",
+      description: "creator empire editing payout",
     });
 
     if (!transfer.ok) {
@@ -1047,7 +1047,7 @@ export async function requestPayout(
     senderBatchId: batch.batch_id,
     email: batch.address,
     amountCents: batch.amount_cents,
-    note: "your ugc flows editing payout",
+    note: "your creator empire editing payout",
   });
 
   if (!sent.ok) {

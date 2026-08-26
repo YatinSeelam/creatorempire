@@ -14,7 +14,7 @@ import {
 } from "@/lib/editing";
 
 /**
- * An editor's public portfolio at ugcflows.com/e/<handle>.
+ * An editor's public portfolio at /e/<handle>.
  *
  * Free and anonymous by design: this is the link an editor drops in a bio or a
  * dm, so it goes through a plain anon client (no cookies, so the route can
@@ -78,7 +78,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { handle } = await params;
   const editor = await getPublicEditor(handle);
 
-  if (!editor) return { title: "not found · ugc flows", robots: { index: false } };
+  if (!editor) return { title: "not found · creator empire", robots: { index: false } };
 
   const name = editor.name || editor.handle;
   const title = `${name} · video editor`;
@@ -301,7 +301,7 @@ export default async function EditorPortfolioPage({ params }: Props) {
             want this editor on your videos?
           </p>
           <p className="mt-1 text-[13.5px] text-ink-50">
-            post your job on ugc flows and editors like {name} can claim it.
+            post your job on creator empire and editors like {name} can claim it.
           </p>
           <Link
             href="/login?next=/editing"

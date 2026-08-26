@@ -16,7 +16,7 @@ import { createClient } from "@/lib/supabase/server";
  * import the founder helpers on purpose, so it builds the same on trees from
  * before and after the admin → founder rename.
  */
-export const metadata = { title: "editor roster · ugc flows" };
+export const metadata = { title: "editor roster · creator empire" };
 
 export default async function EditorRosterPage() {
   const supabase = await createClient();

@@ -7,7 +7,7 @@ one list, one owner per line. everything else in the codebase is optional or alr
 | service | what it runs | plan | sign up | env var |
 |---|---|---|---|---|
 | vercel | hosting the app | hobby (free) is fine to start, pro ($20/mo) once students are on it | vercel.com | none, it is the deploy itself |
-| supabase | database + login | shared with ugc flows, already paid | supabase.com | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` |
+| supabase | database + login | free tier is fine to start, pro ($25/mo) once students are on it | supabase.com | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` |
 | upload-post | the scheduler (autoposting to tiktok, instagram, youtube, facebook) | starts around $20/mo, price goes up with connected accounts | upload-post.com | `UPLOAD_POST_API_KEY` |
 | rapidapi | tiktok + instagram view tracking | subscribe the same rapidapi account to two apis: `tiktok-api23` and `instagram-api-fast-reliable-data-scraper`. flat monthly, roughly $10 to $30 each depending on tier | rapidapi.com | `RAPIDAPI_KEY` (one key covers both) |
 | google cloud | youtube view tracking | free. enable "YouTube Data API v3" and make an api key. 10,000 units a day covers ~3,000 accounts | console.cloud.google.com | `YOUTUBE_API_KEY` |
@@ -34,7 +34,7 @@ flow / anthropic, deepgram, apify, google drive keys, cloudflare email worker, v
 
 - `NEXT_PUBLIC_CE_ORG_ID` = the workspace id
 - `NEXT_PUBLIC_SITE_URL` = the address the app lives at
-- `CRON_SECRET` = not needed here, the ugc flows deploy runs the sync for both
+- `CRON_SECRET` = required. vercel cron sends it as a bearer token; without it `/api/cron/refresh` 503s and view counts never refresh
 
 ## rough monthly total
 

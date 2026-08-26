@@ -27,7 +27,7 @@ import { money, shortDate } from "@/lib/money";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
-  title: `${landing.headline.pre} ${landing.headline.accent} · ugc flows`,
+  title: `${landing.headline.pre} ${landing.headline.accent} · creator empire`,
   description: landing.sub,
   // the one page in this group a stranger is meant to find. everything else
   // under /editors is somebody's own desk and stays out of the index.

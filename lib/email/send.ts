@@ -106,7 +106,7 @@ export function notificationHtml(opts: {
     <h1 style="margin:0 0 14px;color:#fafafa;font-size:18px;font-weight:600;">${esc(opts.heading)}</h1>
     ${lines}
     ${cta}
-    <p style="margin:22px 0 0;color:#52525b;font-size:12px;">ugc flows</p>
+    <p style="margin:22px 0 0;color:#52525b;font-size:12px;">creator empire</p>
   </div>
 </body></html>`;
 }
