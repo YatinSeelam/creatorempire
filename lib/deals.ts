@@ -290,32 +290,130 @@ export type MonthlyBase = {
  * can pay, not the most likely. Estimating a hit rate off a handful of posts
  * would be a guess wearing the same typeface as the read numbers beside it.
  */
+/**
+ * Days of the calendar month containing `now` on which the deal is live.
+ *
+ * The whole month for an open-ended deal, and the overlap otherwise. A quota is
+ * a rate of posting, so multiplying it by days the deal was not running is the
+ * difference between "1 a day" and "1 a day for the eight days this ran".
+ */
+function liveDaysInMonth(deal: Pick<Deal, "started_on" | "ends_on">, now: Date): number {
+  const first = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const last = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), daysInMonth(now));
+  const from = deal.started_on
+    ? Math.max(first, Date.parse(`${deal.started_on}T00:00:00Z`))
+    : first;
+  const to = deal.ends_on ? Math.min(last, Date.parse(`${deal.ends_on}T00:00:00Z`)) : last;
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) return 0;
+  return Math.round((to - from) / 86_400_000) + 1;
+}
+
 export function monthlyBaseOutlook(
   deal: Pick<
     Deal,
-    "flat_fee_cents" | "flat_fee_kind" | "status" | "posting_quota" | "posting_period"
+    | "flat_fee_cents"
+    | "flat_fee_kind"
+    | "status"
+    | "posting_quota"
+    | "posting_period"
+    | "started_on"
+    | "ends_on"
   >,
   /** base pay booked this month: `flatFeeCents` at today minus at the last day
    *  of last month. The caller owns that subtraction because only the database
    *  knows how many videos were owed a base fee on either day. */
   bookedCents: number,
-  now = new Date()
+  now = new Date(),
+  opts: {
+    /** true when any bonus rule on the deal has `tier_mode = 'replace'`. */
+    replacesBase?: boolean;
+  } = {}
 ): MonthlyBase {
   const settled = { bookedCents, projectedCents: bookedCents, forecast: false };
 
   if (deal.flat_fee_kind !== "per_video") return settled;
   if (deal.status !== "active" || !deal.flat_fee_cents) return settled;
 
+  // A rule that replaces the base fee makes this forecast unsound rather than
+  // approximate. `deal_earnings` drops a replaced video out of `base_videos`,
+  // so `bookedCents` on a fully-replacing deal is permanently 0 — which reads
+  // here as "nothing posted yet" and forecasts a whole month of base pay the
+  // terms say is never owed, every day of the month, without ever correcting
+  // itself. The bonus half is already counting those videos.
+  if (opts.replacesBase) return settled;
+
   const cadence = postingCadence(deal);
   if (!cadence) return settled;
 
-  const expected = Math.round(cadence.perDay * daysInMonth(now));
+  // Only the days of this month the deal is actually live. `status` is set by
+  // hand and nothing flips it when `ends_on` passes, so a deal that finished on
+  // the 8th sits at `active` and would otherwise forecast a full month of work
+  // nobody is going to do. Zero live days is an ended deal: hand back what it
+  // booked and forecast nothing.
+  const live = liveDaysInMonth(deal, now);
+  if (live <= 0) return settled;
+
+  const expected = Math.round(cadence.perDay * live);
   const posted = Math.round(bookedCents / deal.flat_fee_cents);
   return {
     bookedCents,
     projectedCents: deal.flat_fee_cents * Math.max(expected, posted),
     forecast: expected > posted,
   };
+}
+
+/**
+ * Where a deal's BONUS lands by the end of the calendar month.
+ *
+ * The counterpart to `monthlyBaseOutlook`, and a deliberately weaker claim.
+ * Base pay is written on the deal: a retainer is a fact and a quota is an
+ * agreement. A bonus turns on views nobody has yet, so the only honest forecast
+ * is a run rate — what the deal has actually been paying per day lately,
+ * carried across the days the month has left.
+ *
+ * Three guards keep it from inventing money:
+ *
+ * - `continuous` is false when ANY rule on the deal is a `milestone`. Those pay
+ *   in steps, once, at a threshold, and the rate is read off a deal-level total
+ *   that cannot tell a $2,000 tier landing on Tuesday apart from a fortnight of
+ *   CPM. Multiplying that day by the days remaining forecasts the same jackpot
+ *   two or three more times. A deal mixing a CPM with a milestone therefore
+ *   projects only what it has booked: understating a real CPM is a smaller lie
+ *   than inventing a tier nobody will hit twice.
+ * - the rate is read off a trailing window, not the month to date, because on
+ *   the 2nd the month to date is one day of noise multiplied by thirty.
+ * - a paused deal is not going to earn the rest of the month, same as base.
+ *
+ * `daysLeft` is the caller's job and is not simply "what is left of the month":
+ * it is capped at the day the deal ends and at the day its last bonus rule
+ * closes, because an `absolute` window with an `ends_on` is a hard stop and
+ * carrying a rate past it bills for days the rule cannot pay on.
+ *
+ * The result never goes below what is booked, so a quiet week can slow the
+ * forecast down and can never claw back money already earned.
+ */
+export function monthlyBonusOutlook(args: {
+  /** bonus this calendar month has already earned, in cents. */
+  bookedCents: number;
+  /** bonus earned across the trailing window, in cents. */
+  recentCents: number;
+  /** how many days that trailing window covers. */
+  recentDays: number;
+  /** days after today that are still inside the month. */
+  daysLeft: number;
+  /** false when every rule on the deal is a milestone. */
+  continuous: boolean;
+  active: boolean;
+}): MonthlyBase {
+  const { bookedCents, recentCents, recentDays, daysLeft, continuous, active } = args;
+  const settled = { bookedCents, projectedCents: bookedCents, forecast: false };
+
+  if (!active || !continuous) return settled;
+  if (daysLeft <= 0 || recentDays <= 0 || recentCents <= 0) return settled;
+
+  const ahead = Math.round((recentCents / recentDays) * daysLeft);
+  if (ahead <= 0) return settled;
+  return { bookedCents, projectedCents: bookedCents + ahead, forecast: true };
 }
 
 // ------------------------------------------------------------------ flat fees

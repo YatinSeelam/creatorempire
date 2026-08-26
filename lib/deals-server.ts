@@ -344,7 +344,14 @@ export async function loadDeal(id: string): Promise<DealDetail | null> {
     replacedVideos,
     bonusCents,
     flatCents: flatFeeCents(deal, baseVideos, now),
-    baseMonth: monthlyBaseOutlook(deal, bookedBaseCents, now),
+    // the same guard the dashboard applies: a rule that replaces the base fee
+    // makes `bookedBaseCents` read 0 forever, which would forecast a full
+    // month of base pay the terms say is never owed.
+    baseMonth: monthlyBaseOutlook(deal, bookedBaseCents, now, {
+      replacesBase: ((rules.data ?? []) as BonusRule[]).some(
+        (r) => r.tier_mode === "replace"
+      ),
+    }),
     baseVideos,
     totalViews: counted.reduce((sum, v) => sum + Number(v.views), 0),
     overrideDelta,

@@ -1,3 +1,65 @@
+2026-08-26 — dashboard: what the month lands on, and eight accuracy fixes behind it
+
+the ask: show a projection of end-of-month earnings including bonuses, organised well.
+
+new panel on /dashboard, above the four tiles and deliberately outside the range
+picker: "on track for $X", booked vs still to come, a bar whose fill is the
+booked share with a tick marking where the month actually is, base and bonus as
+separate halves, six months of history with this month's forecast drawn as a
+dashed cap, a month-over-month line, then a row per deal. `earnings.outlook` and
+`earnings.months` were both already being computed by loadEarnings and thrown
+away; the panel is what finally reads them. page flipped off flame/rounded-xl
+onto ink/squared to match the rest of the product.
+
+- lib/deals.ts: new monthlyBonusOutlook(), the counterpart to monthlyBaseOutlook.
+  bonus cannot be read off a rate sheet, so it is a run rate over the trailing 7
+  days carried across the days the month has left, floored at what is booked.
+  off entirely when a milestone rule is anywhere on the deal: the rate is
+  measured on a deal-level total that cannot tell a $2,000 tier landing on
+  tuesday apart from a fortnight of cpm, and multiplying that day forward
+  forecasts the same jackpot two or three more times.
+- lib/deals.ts: monthlyBaseOutlook now refuses to forecast a deal carrying a
+  `tier_mode = replace` rule. deal_earnings drops replaced videos out of
+  base_videos, so booked base reads 0 forever, which the quota maths read as
+  "nothing posted yet" and turned into a full month of pay never owed. also
+  takes only the days of the month the deal is actually live, because nothing
+  flips `status` when `ends_on` passes and a deal that finished on the 8th was
+  forecasting a full month of work nobody was going to do.
+- lib/dash-server.ts: one bonus_rules read builds a per-deal digest (continuous,
+  milestone, replacesBase, closesOn). the run rate is capped at the deal's
+  ends_on and at the day its last absolute-window rule closes, because carrying
+  a rate past a hard stop bills for days the rule cannot pay on.
+- lib/dash-server.ts: an rpc resolves with {data: null, error} rather than
+  throwing, and `?? []` turned that into "everyone earned nothing that day". a
+  failed BASELINE therefore printed a deal's whole lifetime under a "last 30
+  days" label. failed days are remembered now, between() returns 0 rather than
+  inflating, the forecast steps aside, and the page says the numbers are short.
+- lib/dash-server.ts: the views window now carries a baseline forward across the
+  sync interval instead of using the earliest reading inside the window.
+  snapshots land every 3 days, so `today` was comparing today's reading against
+  itself and reporting 0 views roughly two days in three.
+- lib/dash-server.ts: per-deal views/posts now respect `videos.counts`, so
+  un-ticking a video stops it counting here the way it already does on /deals
+  and in every payout. two "views" columns one click apart no longer disagree.
+- lib/dash-server.ts: posts queued/failed get their own unwindowed counts. they
+  are stated as "right now" and were being bounded by the range picker, which
+  hid a post scheduled for next week behind a 30-day floor on created_at.
+- lib/dash-server.ts: connected accounts counts only the four platforms this
+  product tracks. upload-post returns every network a person ever logged into,
+  so a creator with linkedin and x attached read "4 of 2 connected".
+- lib/dash-server.ts: postedInRange reads the exact count header rather than
+  rows.length, which a page cap truncates first.
+- lib/dash-server.ts: deleted DashboardTrend, postedThisWeek and the growth
+  maths behind them. four queries including an rpc, on every dashboard load,
+  feeding fields no page has ever rendered.
+- app/(dash)/dashboard/page.tsx: the "earned" tile stops splitting into paid vs
+  accruing. paidCents is every payout ever logged and the total is one window,
+  so past a creator's first month it read "all of it is paid" on a day money was
+  actively being earned. it shows the flat/bonus split of the window instead.
+
+found by two audit subagents against the live schema; both reports verified
+before acting.
+
 2026-08-26  editing list rebuilt for the link model, login stripped back, cron cleaned. /editing is a thin toolbar plus one squared table: batch, state, link, updated, action. state is derived from the link and the cuts (no link yet / with the editor / cut is in / done / cancelled), not from the marketplace statuses, and the row's own button is COPY LINK, because the list is where you go to send it. loadEditJobs now reads edit_job_handoff_links instead of the editor's name. gone: the tabs for "in the market" and "claimed", the four-node posted/claimed/review/done bar, the "an editor claims it" banner. login lost its card and its grid background: mark, heading, one black squared google button, one line. cron: the four editing-market clocks came out of /api/cron/refresh, auto-approve first, because with no marketplace a job that marks itself done 48h after a cut lands is the app answering a question nobody asked. env: CRON_SECRET was EMPTY so the hourly drain was 503ing and NOTHING was ever syncing on its 3 day cadence, now generated locally (set the same value in vercel); SCRAPECREATORS_API_KEY had a leading space, stripped. still blocked on SUPABASE_SECRET_KEY, which is unset: the cron 503s without it, the credit ledger refuses to run, and only you can copy it out of the supabase dashboard. dashboard numbers check out, they are zero because there are zero deals, accounts and videos in this project.
 2026-08-26  editing job page rebuilt minimal: black, squared, half the words. the four-mark progress rail is now one line (four 3px bars plus the current step's sentence, nothing about steps behind you). the page is a thin toolbar, the LINK as a full-width row, then a grid: cut / file the cut / approve on the left, brief / files / job / close it as squared folds down the right. gone: the "your editor" explainer paragraph, the "how it comes back" block, the empty "the cut" panel, the job trail, and the star rating for an editor who has no account here. local Card/Fold instead of Panel/DashBar (those are rounded cards with shadows and a 24px title). cut-player draws its own square frame, version chips are black. dropzone, form.tsx fields and every Submit went rounded-md and ink instead of rounded-pill and navy, so the shared vocabulary matches; Submit's `flame` tone paints ink now and keeps its name. copy lowercased and cut throughout, including the handoff room, which also got tighter padding and a height cap on previewed media.
 2026-08-25  credits and the campaign manager are gone from creator empire, and the handoff link mints itself. posting a job is free: no spend_job_credits, no refunds, no wallet, /editing/credits and components/dash/credits-shop deleted, buyCreditsPack and the stripe webhook's job_credits branch removed, pay_cents and credits written as 0, bundleLabel no longer prints a price. the client review half is deleted too (app/review, components/review, components/dash/client-review, the reviewLink/clientNotes reads, requestRevisions, postJobComment, forwardClientNote, dismissClientNote); lib/editing-review*.ts stay so a copy from ugc flows still lands. approveEditJob is now a status flip with a rating and no payout. the job page is one column of work plus a single "your editor" panel holding the link. createEditJob mints the handoff token itself (new public.new_link_token()), so a job has a live url from its first render and the make-the-link form is only a fallback. DOWNLOADS: the room was signing with createServiceClient() and SUPABASE_SECRET_KEY is unset here, so every file read "unavailable". signing now runs on the caller's own anon client behind a new storage policy, editing_assets_handoff_read -> handoff_object_readable(name), which says yes only to footage/asset/reference/doc on a job with a live link, never to a cut, and never through a revoked or expired one. verified against live storage: anon sign 200, &download= returns content-disposition attachment; verified in sql that footage=t cut=f. added a download-all button. migrations 20260825210000_link_token and 20260825220000_handoff_downloads, both applied.
