@@ -363,19 +363,19 @@ export function Dropzone({
         }}
         onDragLeave={() => setOver(false)}
         onDrop={onDrop}
-        className={`rounded-xl border border-dashed text-center transition-colors ${
-          compact ? "px-4 py-4" : "px-5 py-7"
+        className={`rounded-md border border-dashed text-center transition-colors ${
+          compact ? "px-4 py-4" : "px-5 py-6"
         } ${fill ? "flex flex-1 flex-col items-center justify-center" : ""} ${
           disabled
             ? "border-line bg-shell opacity-70"
             : over
-              ? "border-flame bg-ember"
+              ? "border-ink bg-shell"
               : "border-line bg-shell"
         }`}
       >
-        <p className="text-[15px] font-bold tracking-[-0.01em]">{label}</p>
+        <p className="text-[13.5px] font-bold tracking-[-0.01em]">{label}</p>
         {hint && (
-          <p className="mx-auto mt-1 max-w-[420px] text-[13px] leading-[1.5] text-ink-50">
+          <p className="mx-auto mt-1 max-w-[420px] text-[12px] leading-[1.5] text-ink-50">
             {hint}
           </p>
         )}
@@ -391,7 +391,7 @@ export function Dropzone({
               type="button"
               disabled={busy}
               onClick={() => fileRef.current?.click()}
-              className="rounded-pill bg-flame px-5 py-2 text-[13.5px] font-bold text-on-accent transition-colors hover:bg-flame-dark disabled:opacity-60"
+              className="rounded-md bg-ink px-4 py-1.5 text-[12.5px] font-bold text-paper transition-colors hover:bg-ink/85 disabled:opacity-60"
             >
               {busy
                 ? `uploading ${Math.min(doneCount + 1, rows.length)} of ${rows.length}`
@@ -401,7 +401,7 @@ export function Dropzone({
               type="button"
               disabled={busy}
               onClick={() => dirRef.current?.click()}
-              className="text-[13px] font-semibold text-ink-50 underline decoration-line underline-offset-2 transition-colors hover:text-ink disabled:opacity-60"
+              className="text-[12px] font-semibold text-ink-50 underline decoration-line underline-offset-2 transition-colors hover:text-ink disabled:opacity-60"
             >
               or choose a whole folder
             </button>

@@ -47,7 +47,7 @@ const LABEL = "text-[11.5px] font-semibold uppercase tracking-[0.14em] text-ink-
 function Shell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-dvh bg-shell">
-      <div className="mx-auto w-full max-w-[880px] px-5 py-10 sm:py-14">{children}</div>
+      <div className="mx-auto w-full max-w-[840px] px-5 py-8 sm:py-12">{children}</div>
     </main>
   );
 }
@@ -61,7 +61,7 @@ function Card({
 }) {
   return (
     <section
-      className={`rounded-card border border-line bg-paper px-5 py-5 sm:px-6 sm:py-6 ${className}`}
+      className={`rounded-lg border border-line bg-paper px-4 py-4 sm:px-5 ${className}`}
     >
       {children}
     </section>
@@ -74,7 +74,7 @@ function Footer() {
       sent with{" "}
       <a
         href="https://www.creatorempire.app"
-        className="font-semibold hover:text-flame-dark"
+        className="font-semibold underline decoration-line underline-offset-2 hover:text-ink"
       >
         creator empire
       </a>
@@ -102,8 +102,8 @@ function Closed({ reason }: { reason: "missing" | "revoked" | "expired" }) {
   return (
     <Shell>
       <Card className="text-center">
-        <p className="text-[22px] font-extrabold tracking-[-0.02em]">{copy.head}</p>
-        <p className="mx-auto mt-2 max-w-[42ch] text-[14.5px] leading-[1.65] text-ink-50">
+        <p className="text-[18px] font-extrabold tracking-[-0.02em]">{copy.head}</p>
+        <p className="mx-auto mt-2 max-w-[42ch] text-[13px] leading-[1.6] text-ink-50">
           {copy.body}
         </p>
       </Card>
@@ -122,26 +122,26 @@ function Closed({ reason }: { reason: "missing" | "revoked" | "expired" }) {
  */
 function Clip({ file }: { file: RoomFile }) {
   return (
-    <div className="space-y-2.5 rounded-xl border border-line bg-shell p-3">
+    <div className="space-y-2.5 rounded-md border border-line bg-shell p-3">
       {file.url && file.playable ? (
         <video
           src={file.url}
           controls
           preload="metadata"
           playsInline
-          className="w-full rounded-lg bg-black"
+          className="max-h-[460px] w-full rounded-md bg-ink"
         />
       ) : file.url && file.image ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={file.url}
           alt=""
-          className="w-full rounded-lg border border-line object-cover"
+          className="max-h-[360px] w-full rounded-md border border-line object-contain"
         />
       ) : null}
 
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">
           {file.name}
         </span>
         {file.size_bytes ? (
@@ -152,7 +152,7 @@ function Clip({ file }: { file: RoomFile }) {
         {file.downloadUrl ? (
           <a
             href={file.downloadUrl}
-            className="shrink-0 rounded-pill bg-ink px-4 py-1.5 text-[13px] font-bold text-white transition-opacity hover:opacity-90"
+            className="shrink-0 rounded-md bg-ink px-4 py-1.5 text-[12.5px] font-bold text-paper transition-colors hover:bg-ink/85"
           >
             Download
           </a>
@@ -173,15 +173,15 @@ function FileRow({ file }: { file: RoomFile }) {
         <img
           src={file.url}
           alt=""
-          className="size-10 shrink-0 rounded-lg border border-line object-cover"
+          className="size-10 shrink-0 rounded-md border border-line object-cover"
         />
       ) : (
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-line bg-shell text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink-50">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-md border border-line bg-shell text-[10.5px] font-bold uppercase tracking-[0.1em] text-ink-50">
           {FILE_KIND_LABEL[file.kind] ?? file.kind}
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[14px] font-semibold">{file.name}</p>
+        <p className="truncate text-[13px] font-semibold">{file.name}</p>
         {file.size_bytes ? (
           <p className="mt-0.5 text-[12.5px] tabular-nums text-ink-50">
             {humanSize(file.size_bytes)}
@@ -191,7 +191,7 @@ function FileRow({ file }: { file: RoomFile }) {
       {file.downloadUrl ? (
         <a
           href={file.downloadUrl}
-          className="shrink-0 text-[13px] font-semibold text-ink-70 transition-colors hover:text-flame-dark"
+          className="shrink-0 text-[12.5px] font-semibold text-ink-70 transition-colors hover:text-ink"
         >
           Download
         </a>
@@ -214,7 +214,7 @@ function Links({ label, items }: { label: string; items: LinkItem[] }) {
               href={link.url}
               target="_blank"
               rel="noreferrer"
-              className="block truncate text-[14px] font-semibold text-ink-70 transition-colors hover:text-flame-dark"
+              className="block truncate text-[13.5px] font-semibold text-ink-70 transition-colors hover:text-ink"
             >
               {link.label || link.url}
             </a>
@@ -251,10 +251,10 @@ export default async function HandoffPage({ params }: Props) {
 
   return (
     <Shell>
-      <div className="space-y-4">
+      <div className="space-y-3">
         {/* ------------------------------------------------------- the head */}
         <Card>
-          <div className="flex min-w-0 items-center gap-3.5">
+          <div className="flex min-w-0 items-center gap-3">
             <BrandMark
               name={job.brand_name ?? job.title}
               logo={brandLogo({
@@ -269,21 +269,21 @@ export default async function HandoffPage({ params }: Props) {
                   {job.brand_name}
                 </p>
               )}
-              <h1 className="truncate text-[21px] font-extrabold tracking-[-0.02em]">
+              <h1 className="truncate text-[18px] font-extrabold tracking-[-0.02em]">
                 {job.title}
               </h1>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[13px] text-ink-50">
-            <span className="rounded-pill bg-shell px-3 py-1 font-semibold text-ink-70">
+          <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[12px] text-ink-50">
+            <span className="rounded-md border border-line px-2 py-0.5 font-semibold text-ink-70">
               {job.video_count} video{job.video_count === 1 ? "" : "s"}
             </span>
-            <span className="rounded-pill bg-shell px-3 py-1 font-semibold text-ink-70">
+            <span className="rounded-md border border-line px-2 py-0.5 font-semibold text-ink-70">
               {kind}
             </span>
             {job.is_rush && (
-              <span className="rounded-pill bg-ember px-3 py-1 font-semibold text-flame-dark">
+              <span className="rounded-md bg-ink px-2 py-0.5 font-semibold text-paper">
                 rush
               </span>
             )}
@@ -302,19 +302,19 @@ export default async function HandoffPage({ params }: Props) {
           )}
 
           {room.closed && (
-            <p className="mt-4 rounded-card border border-line bg-shell px-4 py-3 text-[13.5px] leading-[1.6] text-ink-50">
+            <p className="mt-4 rounded-md border border-line bg-shell px-4 py-3 text-[13px] leading-[1.6] text-ink-50">
               this batch is finished. the files are still here to look at,
               nothing is waiting on you.
             </p>
           )}
           {!room.closed && room.delivered && (
-            <p className="mt-4 rounded-card border border-line bg-ember px-4 py-3 text-[13.5px] leading-[1.6] text-flame-dark">
+            <p className="mt-4 rounded-md border border-ink bg-shell px-4 py-3 text-[13px] leading-[1.6] text-ink">
               a cut has been filed against this batch already. check with whoever
               sent you the link before you start.
             </p>
           )}
           {room.unsigned && (
-            <p className="mt-4 rounded-card border border-line bg-shell px-4 py-3 text-[13.5px] leading-[1.6] text-ink-50">
+            <p className="mt-4 rounded-md border border-line bg-shell px-4 py-3 text-[13px] leading-[1.6] text-ink-50">
               the uploaded files are not coming through right now. ask whoever
               sent this link to send them another way.
             </p>
@@ -325,11 +325,11 @@ export default async function HandoffPage({ params }: Props) {
         <Card className="space-y-4">
           <p className={LABEL}>The brief</p>
           {job.brief ? (
-            <p className="whitespace-pre-wrap text-[15px] leading-[1.7] text-ink-70">
+            <p className="whitespace-pre-wrap text-[13.5px] leading-[1.65] text-ink-70">
               {job.brief}
             </p>
           ) : (
-            <p className="text-[14px] text-ink-50">
+            <p className="text-[13px] text-ink-50">
               nothing written. the title is the whole ask.
             </p>
           )}
@@ -339,7 +339,7 @@ export default async function HandoffPage({ params }: Props) {
               {job.style && (
                 <div>
                   <p className={LABEL}>Style</p>
-                  <p className="mt-1 whitespace-pre-wrap text-[14px] leading-[1.6] text-ink-70">
+                  <p className="mt-1 whitespace-pre-wrap text-[13px] leading-[1.6] text-ink-70">
                     {job.style}
                   </p>
                 </div>
@@ -347,7 +347,7 @@ export default async function HandoffPage({ params }: Props) {
               {job.format && (
                 <div>
                   <p className={LABEL}>Format</p>
-                  <p className="mt-1 whitespace-pre-wrap text-[14px] leading-[1.6] text-ink-70">
+                  <p className="mt-1 whitespace-pre-wrap text-[13px] leading-[1.6] text-ink-70">
                     {job.format}
                   </p>
                 </div>
@@ -375,7 +375,7 @@ export default async function HandoffPage({ params }: Props) {
           </div>
 
           {room.footage.length === 0 ? (
-            <p className="text-[14px] leading-[1.6] text-ink-50">
+            <p className="text-[13px] leading-[1.6] text-ink-50">
               no files here. the raw footage is on one of the links above, or it
               is coming separately.
             </p>
@@ -443,7 +443,7 @@ export default async function HandoffPage({ params }: Props) {
         {!room.closed && (
           <Card>
             <p className={LABEL}>When you are done</p>
-            <p className="mt-1.5 text-[14px] leading-[1.65] text-ink-70">
+            <p className="mt-1.5 text-[13px] leading-[1.6] text-ink-70">
               send the finished cut back to whoever sent you this link, the same
               way you always do. there is nothing to upload here.
             </p>

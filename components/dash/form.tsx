@@ -6,7 +6,7 @@ import { useFormStatus } from "react-dom";
 /**
  * The form primitives, lifted out of settings-controls so every form in the app
  * has the same border, radius and focus ring. Same drawing language as ui.tsx:
- * shell fill, line border, flame on focus.
+ * shell fill, line border, ink on focus.
  */
 
 export function Label({ children }: { children: ReactNode }) {
@@ -18,7 +18,7 @@ export function Label({ children }: { children: ReactNode }) {
 }
 
 const shell =
-  "mt-1.5 flex items-center rounded-xl border border-line bg-shell px-3.5 focus-within:border-flame";
+  "mt-1.5 flex items-center rounded-md border border-line bg-shell px-3.5 focus-within:border-ink";
 const control =
   "w-full bg-transparent py-2.5 text-[14.5px] font-medium placeholder:font-normal placeholder:text-ink-50/70 focus:outline-none";
 
@@ -199,14 +199,14 @@ export function CheckRow({
         {options.map((o) => (
           <label
             key={o.value}
-            className="flex cursor-pointer items-center gap-2 rounded-pill border border-line bg-shell px-3.5 py-2 text-[14px] font-semibold has-checked:border-flame has-checked:bg-ember has-checked:text-flame-dark"
+            className="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-shell px-3.5 py-2 text-[14px] font-semibold has-checked:border-ink has-checked:bg-ink has-checked:text-paper"
           >
             <input
               type="checkbox"
               name={name}
               value={o.value}
               defaultChecked={values?.includes(o.value)}
-              className="accent-flame"
+              className="accent-[var(--color-ink)]"
             />
             {o.label}
           </label>
@@ -227,7 +227,12 @@ export function Submit({
   children?: ReactNode;
   pendingLabel?: string;
   /** `ghost` is for a button that repeats on every row of a list, where a
-   *  border on each one draws a column of boxes down the table. */
+   *  border on each one draws a column of boxes down the table.
+   *
+   *  `flame` is the filled one and it paints INK now, not the navy the name
+   *  remembers. The name is left alone because it is typed at a few dozen call
+   *  sites and renaming it changes no pixel; what a filled button looks like is
+   *  decided here, once. */
   tone?: "flame" | "line" | "ghost";
   size?: "lg" | "sm" | "xs";
   /** For a submit the form cannot honour yet, like a post with no video on it.
@@ -238,7 +243,7 @@ export function Submit({
 
   const look =
     tone === "flame"
-      ? "bg-flame text-on-accent hover:bg-flame-dark"
+      ? "bg-ink text-paper hover:bg-ink/85"
       : tone === "ghost"
         ? "text-ink-50 hover:bg-shell hover:text-ink"
         : "border border-line text-ink-70 hover:text-ink";
@@ -253,7 +258,7 @@ export function Submit({
     <button
       type="submit"
       disabled={pending || disabled}
-      className={`shrink-0 rounded-pill font-semibold transition-colors disabled:opacity-60 ${look} ${box}`}
+      className={`shrink-0 rounded-md font-semibold transition-colors disabled:opacity-60 ${look} ${box}`}
     >
       {pending ? (pendingLabel ?? "Working") : children}
     </button>
@@ -295,7 +300,7 @@ export function ConfirmSubmit({
       <button
         type="button"
         onClick={() => setArmed(true)}
-        className={`shrink-0 rounded-pill font-semibold transition-colors ${
+        className={`shrink-0 rounded-md font-semibold transition-colors ${
           tone === "ghost"
             ? "text-ink-50 hover:bg-shell hover:text-ink"
             : "border border-line text-ink-70 hover:text-ink"

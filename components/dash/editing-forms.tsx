@@ -123,10 +123,10 @@ function Block({
   children: ReactNode;
 }) {
   return (
-    <section className="border-t border-line pt-5 first:border-t-0 first:pt-0">
-      <h3 className="text-[15px] font-bold tracking-[-0.015em]">{title}</h3>
-      <p className="mt-0.5 text-[13px] text-ink-50">{hint}</p>
-      <div className="mt-4 space-y-4">{children}</div>
+    <section className="border-t border-line pt-4 first:border-t-0 first:pt-0">
+      <h3 className="text-[12.5px] font-bold tracking-[-0.01em]">{title}</h3>
+      <p className="mt-0.5 text-[11.5px] text-ink-50">{hint}</p>
+      <div className="mt-3 space-y-3.5">{children}</div>
     </section>
   );
 }
@@ -167,15 +167,15 @@ function JobFields({
   return (
     <div className="space-y-6">
       <Block
-        title="What the job is"
-        hint="One brand deal, one set of instructions. Five cuts for the same brand is one job, not five."
+        title="the job"
+        hint="one brand deal, one set of instructions."
       >
         {/* no title box. a job is "the next batch for Candle", and a field
             that only ever gets the brand's name typed into it is a field
             worth deleting. the brand names it and a counter separates
             batches, resolved server side where the existing ones are known. */}
         <Select
-          label="Brand deal"
+          label="brand deal"
           name="deal_id"
           options={[
             { value: "", label: "not tied to a deal" },
@@ -184,8 +184,8 @@ function JobFields({
           defaultValue={job?.deal_id ?? ""}
           hint={
             job
-              ? "Moves the finished cuts to another brand. The name this batch already has does not change."
-              : "Names this batch and puts the brand's logo on the board. A second batch for the same brand is numbered, so Candle is followed by Candle 2."
+              ? "moves the batch to another brand. its name does not change."
+              : "names this batch. a second one for the same brand is numbered."
           }
         />
 
@@ -195,7 +195,7 @@ function JobFields({
             editor claims it, and a date typed here could only disagree with
             the clock the market actually runs. */}
         <Field
-          label="How many videos in this batch"
+          label="how many videos"
           name="video_count"
           type="number"
           value={String(videos)}
@@ -203,51 +203,51 @@ function JobFields({
             const n = parseInt(v, 10);
             setVideos(Number.isFinite(n) && n > 0 ? Math.min(n, 50) : 1);
           }}
-          hint="Every video in a batch shares one brief, one editor and one 36 hour clock that starts when it is claimed. If a set needs different instructions, post it as a second job."
+          hint="one brief, one editor, one batch. different instructions means a second job."
         />
 
         {/* style and format used to sit under here as two more boxes. they
             were a third place to write the same instruction, so the brief is
             the only place now. */}
         <Area
-          label="Script / brief"
+          label="script / brief"
           name="brief"
           rows={6}
           defaultValue={job?.brief ?? ""}
-          placeholder="Paste the script if there is one, then tell the editor how to cut it: what the videos are for, what to keep, where the hook is, the look you want and the format."
+          placeholder="the script if there is one, then how to cut it: what to keep, where the hook is, the look, the format."
         />
       </Block>
 
       <Block
-        title="What the editor works from"
-        hint="Links here for the whole batch. Once the job is posted you can upload the videos and the assets to it directly."
+        title="what they work from"
+        hint="links for the whole batch. files go on the job itself."
       >
         <LinksField
-          label="Video links"
+          label="video links"
           name="footage"
           urlPlaceholder="https://drive.google.com/..."
           initial={job?.footage_links}
-          hint="Where the raw videos live. Drive, Dropbox, anything with a link."
+          hint="drive, dropbox, anything with a link."
         />
 
         <LinksField
-          label="References"
+          label="references"
           name="reference"
           urlPlaceholder="https://www.tiktok.com/..."
           initial={job?.reference_links}
-          hint="Links only. Videos that already look like what you want back."
+          hint="videos that already look like what you want back."
         />
       </Block>
 
       <Block
-        title="What kind of edit"
-        hint="What your editor is being asked for. It rides along on the handoff link."
+        title="what kind of edit"
+        hint="rides along on the link."
       >
           {/* one question, two answers. the four "does it need b-roll" boxes
               that used to live here were ticked on essentially every job, so
               they said nothing and just made the form longer. */}
           <div>
-            <Label>What kind of videos</Label>
+            <Label>what kind of videos</Label>
             <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
               {VIDEO_KINDS.map((k) => (
                 <button
@@ -285,7 +285,7 @@ function JobFields({
               onChange={(e) => setRush(e.target.checked)}
               className="accent-flame"
             />
-            Rush it, 6 hour turnaround
+            rush it, 6 hour turnaround
           </label>
 
           <p className="text-[13px] leading-[1.5] text-ink-50">
@@ -305,8 +305,8 @@ export function EditJobForm({ job, deals }: { job: EditJob; deals: PickerDeal[] 
     <form action={action}>
       <input type="hidden" name="job_id" value={job.id} />
       <JobFields job={job} deals={deals} />
-      <div className="mt-6 flex flex-wrap items-center gap-4">
-        <Submit pendingLabel="Saving">Save the job</Submit>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Submit size="sm" pendingLabel="saving">save</Submit>
         <Note state={state} />
       </div>
     </form>
@@ -345,9 +345,9 @@ export function JobAssetUploader({
       <div className="flex flex-wrap items-center gap-2">
         {(
           [
-            ["footage", "Videos to edit"],
-            ["asset", "Assets"],
-            ["doc", "Docs"],
+            ["footage", "videos"],
+            ["asset", "assets"],
+            ["doc", "docs"],
           ] as const
         ).map(([k, label]) => (
           <button
@@ -355,9 +355,9 @@ export function JobAssetUploader({
             key={k}
             onClick={() => setKind(k)}
             aria-pressed={kind === k}
-            className={`rounded-pill border px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
+            className={`rounded-md border px-3 py-1 text-[12px] font-semibold transition-colors ${
               kind === k
-                ? "border-flame bg-ember text-flame-dark"
+                ? "border-ink bg-ink text-paper"
                 : "border-line text-ink-50 hover:text-ink"
             }`}
           >
@@ -366,12 +366,12 @@ export function JobAssetUploader({
         ))}
 
         {canBrand && (
-          <label className="ml-1 flex cursor-pointer items-center gap-2 text-[13px] text-ink-70">
+          <label className="ml-1 flex cursor-pointer items-center gap-2 text-[12px] text-ink-70">
             <input
               type="checkbox"
               checked={toBrand}
               onChange={(e) => setToBrand(e.target.checked)}
-              className="size-4 accent-flame"
+              className="size-3.5 accent-[var(--color-ink)]"
             />
             keep on the brand deal
           </label>
@@ -382,19 +382,19 @@ export function JobAssetUploader({
         folder={brand ? `bank/${dealId}` : `${jobId}/assets`}
         label={
           kind === "footage"
-            ? "Drop the videos"
+            ? "drop the videos"
             : kind === "doc"
-              ? "Drop the docs"
-              : "Drop the assets"
+              ? "drop the docs"
+              : "drop the assets"
         }
         hint={
           brand
-            ? "Kept on the brand deal. Every batch for it gets these without another upload."
+            ? "kept on the brand deal, so every batch for it gets these."
             : kind === "footage"
-              ? "The raw videos for this batch. Files or a whole folder, up to 500 MB each."
+              ? "the raw videos for this batch. up to 500 MB each."
               : kind === "doc"
-                ? "The script, the SOP, the brand guidelines. Anything read before cutting."
-                : "B-roll, music, sfx, product shots, logos. Anything that goes on top of the cut."
+                ? "the script, the sop, the guidelines."
+                : "b-roll, music, sfx, product shots, logos."
         }
         onUploaded={(file) =>
           brand && dealId
@@ -426,8 +426,8 @@ export function DeliveredCutUploader({ jobId }: { jobId: string }) {
     <Dropzone
       folder={`${jobId}/assets`}
       accept="video/*"
-      label="Drop the finished cut"
-      hint="What came back from your editor. Every drop is a new version, so v2 goes here too."
+      label="drop the finished cut"
+      hint="whatever your editor sent back. every drop is a new version."
       onUploaded={(file) => recordDeliveredCut({ jobId, ...file })}
       onDone={() => router.refresh()}
     />

@@ -52,7 +52,7 @@ export function DownloadAll({
       type="button"
       onClick={run}
       disabled={going}
-      className="shrink-0 rounded-pill border border-line px-4 py-1.5 text-[13px] font-semibold text-ink-70 transition-colors hover:text-ink disabled:opacity-60"
+      className="shrink-0 rounded-md border border-line px-3 py-1 text-[12px] font-semibold text-ink-70 transition-colors hover:border-ink hover:text-ink disabled:opacity-60"
     >
       {going ? `saving ${done}/${files.length}` : `download all ${files.length}`}
     </button>
