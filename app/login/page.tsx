@@ -17,7 +17,7 @@ export default async function LoginPage({
   const { next, error } = await searchParams;
 
   return (
-    <AuthShell title="welcome back" sub="sign in with the google account on your seat.">
+    <AuthShell title="welcome back" sub="use the google account your programme invited.">
       <AuthForm next={safeNext(next, "/dashboard")} initialError={error ?? ""} />
     </AuthShell>
   );

@@ -1,60 +1,56 @@
 import Link from "next/link";
 import { EditingRequests } from "@/components/dash/editing-requests";
-import { DashBar, Page, barTitle } from "@/components/dash/ui";
 import { loadEditJobs } from "@/lib/editing-server";
 
 export const dynamic = "force-dynamic";
 
 /**
- * The creator's side of editing: every batch they have posted, and where each
- * one has got to.
+ * Every batch a creator has going, and the link for each one.
  *
- * The list itself is a client component because the status tabs filter what is
- * already on the page. Everything a creator has posted is one read and rarely
- * more than a screenful, so filtering it in the browser is instant and the
- * server does not get asked again to hide four rows.
+ * The list is a client component because the tabs filter what is already on the
+ * page. Everything a creator has posted is one read and rarely more than a
+ * screenful, so filtering it in the browser is instant and the server does not
+ * get asked again to hide four rows.
  */
 export default async function EditingPage() {
   const rows = await loadEditJobs();
+  const live = rows.filter((r) => r.link?.live).length;
 
   return (
-    <>
-      <DashBar
-        lead={<h1 className={barTitle}>Editing</h1>}
-        right={
-          <div className="flex shrink-0 items-center gap-2.5">
-            <Link
-              href="/editing/new"
-              className="flex h-9 items-center rounded-pill bg-flame px-5 text-[14px] font-semibold text-on-accent transition-colors hover:bg-flame-dark"
-            >
-              Post a job
-            </Link>
-          </div>
-        }
-      />
+    <div className="mx-auto w-full max-w-[1280px] space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-[15px] font-bold tracking-[-0.01em]">editing</h1>
+          <span className="text-[12px] text-ink-50">
+            {rows.length} batch{rows.length === 1 ? "" : "es"} · {live} link
+            {live === 1 ? "" : "s"} live
+          </span>
+        </div>
+        <Link
+          href="/editing/new"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-ink px-3 text-[12.5px] font-semibold text-paper transition-colors hover:bg-ink/85"
+        >
+          <span aria-hidden="true">+</span> batch
+        </Link>
+      </div>
 
-      <Page fill className="space-y-6">
-        {rows.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-xl border border-line bg-paper px-5 py-16 text-center shadow-card lg:min-h-0 lg:flex-1">
-            <p className="text-[17px] font-extrabold tracking-[-0.02em]">
-              no edit jobs yet
-            </p>
-            <p className="mx-auto mt-2 max-w-[48ch] text-[14px] leading-[1.6] text-ink-50">
-              record the footage, post the whole batch here with one brief, and
-              send your editor the link. everything they need is on one page,
-              no login, no zip file.
-            </p>
-            <Link
-              href="/editing/new"
-              className="mt-6 inline-flex h-11 items-center rounded-pill bg-flame px-6 text-[14.5px] font-bold text-on-accent transition-colors hover:bg-flame-dark"
-            >
-              post your first job
-            </Link>
-          </div>
-        ) : (
-          <EditingRequests rows={rows} />
-        )}
-      </Page>
-    </>
+      {rows.length === 0 ? (
+        <div className="rounded-lg border border-line bg-paper px-4 py-12 text-center">
+          <p className="text-[13.5px] font-bold">no batches yet</p>
+          <p className="mx-auto mt-1 max-w-[46ch] text-[12.5px] leading-[1.55] text-ink-50">
+            drop the footage, write one brief, and send your editor the link.
+            everything they need is on one page, no login.
+          </p>
+          <Link
+            href="/editing/new"
+            className="mt-4 inline-flex h-8 items-center rounded-md bg-ink px-4 text-[12.5px] font-semibold text-paper transition-colors hover:bg-ink/85"
+          >
+            new batch
+          </Link>
+        </div>
+      ) : (
+        <EditingRequests rows={rows} />
+      )}
+    </div>
   );
 }

@@ -1,10 +1,4 @@
 import { NextResponse } from "next/server";
-import {
-  autoApproveDeliveredJobs,
-  expireOverdueClaims,
-  retierEditors,
-  warnDueSoonClaims,
-} from "@/lib/editing-auto";
 import { notificationHtml, sendEmail } from "@/lib/email/send";
 import { dueAccounts, syncAccount, type SyncResult } from "@/lib/ingest/sync";
 import { latestBalance } from "@/lib/scrape/usage";
@@ -101,33 +95,12 @@ export async function GET(request: Request) {
   const failed = results.filter((r) => !r.ok);
   const balance = await latestBalance();
 
-  // the editing market's clocks ride the same hourly tick. each one best
-  // effort: a failure here must not fail a sync run that already spent real
-  // credits, and one clock failing must not stop the others.
-  let jobsAutoApproved = 0;
-  let claimsWarned = 0;
-  let claimsExpired = 0;
-  let editorsRetiered = 0;
-  try {
-    jobsAutoApproved = (await autoApproveDeliveredJobs(client)).approved;
-  } catch (err) {
-    console.error("[cron] auto-approve failed", err);
-  }
-  try {
-    claimsWarned = (await warnDueSoonClaims(client)).warned;
-  } catch (err) {
-    console.error("[cron] sla warn failed", err);
-  }
-  try {
-    claimsExpired = (await expireOverdueClaims(client)).expired;
-  } catch (err) {
-    console.error("[cron] claim expiry failed", err);
-  }
-  try {
-    editorsRetiered = (await retierEditors(client)).changed;
-  } catch (err) {
-    console.error("[cron] retier failed", err);
-  }
+  // the editing market's four clocks used to ride this tick: auto-approve after
+  // 48h, warn a claim, expire a claim, retier an editor. All four are gone
+  // here, and auto-approve is the one that mattered — with no marketplace,
+  // approving is the creator's own call and a job that marked itself done two
+  // days after a cut landed would be the app answering a question nobody asked
+  // it. The other three act on editors and claims this deploy does not have.
 
   // one alert, on the crossing only. a balance that is already low sends nothing
   // every hour: an alert that repeats is an alert nobody reads.
@@ -165,10 +138,6 @@ export async function GET(request: Request) {
     videos_new: results.reduce((n, r) => n + r.added, 0),
     videos_frozen: results.reduce((n, r) => n + r.frozen, 0),
     api_calls: results.reduce((n, r) => n + r.apiCalls, 0),
-    jobs_auto_approved: jobsAutoApproved,
-    claims_warned: claimsWarned,
-    claims_expired: claimsExpired,
-    editors_retiered: editorsRetiered,
     failures: failed.map((r) => ({ handle: r.handle, platform: r.platform, error: r.error })),
   });
 }

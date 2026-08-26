@@ -27,7 +27,7 @@ import {
   type DealAsset,
 } from "@/lib/editing-files";
 import { brandLogo } from "@/lib/brand-catalog";
-import type { HandoffLink } from "@/lib/editing-handoff";
+import { linkIsLive, type HandoffLink } from "@/lib/editing-handoff";
 import { loadHandoffLink } from "@/lib/editing-handoff-server";
 import { createClient } from "@/lib/supabase/server";
 import { dealScope } from "@/lib/workspace";
@@ -68,8 +68,14 @@ function normalizeEditor(row: Record<string, unknown>): Editor {
 export type EditJobListRow = {
   job: EditJob;
   deliverableCount: number;
-  /** display name of the claimed editor, null while the job is unclaimed. */
-  editorName: string | null;
+  /**
+   * The handoff link, or null when the job has none.
+   *
+   * Read on the LIST, not just the job page, because the list is where a
+   * creator goes to send one: the whole product is that url, and a list that
+   * made you open a job to copy it would be a directory of front doors.
+   */
+  link: { token: string; views: number; live: boolean } | null;
 };
 
 /**
@@ -107,15 +113,13 @@ export async function loadEditJobs(): Promise<EditJobListRow[]> {
   if (jobs.length === 0) return [];
 
   const jobIds = jobs.map((j) => j.id);
-  const editorIds = [
-    ...new Set(jobs.map((j) => j.editor_id).filter((v): v is string => v !== null)),
-  ];
 
-  const [deliverables, editors] = await Promise.all([
+  const [deliverables, links] = await Promise.all([
     supabase.from("edit_job_deliverables").select("job_id").in("job_id", jobIds),
-    editorIds.length
-      ? supabase.from("editors").select("user_id, name, handle").in("user_id", editorIds)
-      : Promise.resolve({ data: [] }),
+    supabase
+      .from("edit_job_handoff_links")
+      .select("job_id, token, views, revoked_at, expires_at")
+      .in("job_id", jobIds),
   ]);
 
   const countBy = new Map<string, number>();
@@ -124,16 +128,29 @@ export async function loadEditJobs(): Promise<EditJobListRow[]> {
     countBy.set(jobId, (countBy.get(jobId) ?? 0) + 1);
   }
 
-  const nameBy = new Map<string, string | null>(
-    ((editors.data ?? []) as { user_id: string; name: string | null; handle: string }[]).map(
-      (e) => [e.user_id, e.name || e.handle || null]
-    )
+  const linkBy = new Map<string, EditJobListRow["link"]>(
+    (
+      (links.data ?? []) as {
+        job_id: string;
+        token: string;
+        views: number | string | null;
+        revoked_at: string | null;
+        expires_at: string | null;
+      }[]
+    ).map((l) => [
+      l.job_id,
+      {
+        token: l.token,
+        views: Number(l.views ?? 0),
+        live: linkIsLive(l),
+      },
+    ])
   );
 
   return jobs.map((job) => ({
     job,
     deliverableCount: countBy.get(job.id) ?? 0,
-    editorName: job.editor_id ? (nameBy.get(job.editor_id) ?? null) : null,
+    link: linkBy.get(job.id) ?? null,
   }));
 }
 

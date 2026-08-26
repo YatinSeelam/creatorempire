@@ -44,29 +44,32 @@ export function AuthForm({
   }
 
   return (
-    <div className="mt-8">
+    <div className="mt-6">
+      {/* one filled button, because there is exactly one way in. the G sits on
+          its own white tile so it stays legible on the black. */}
       <button
         type="button"
         onClick={onGoogle}
         disabled={pending}
-        className="flex h-[52px] w-full items-center justify-center gap-3 rounded-2xl border border-line bg-paper text-[15px] font-semibold transition-colors hover:bg-shell disabled:opacity-60"
+        className="flex h-11 w-full items-center justify-center gap-2.5 rounded-md bg-ink text-[13.5px] font-bold text-paper transition-colors hover:bg-ink/85 disabled:opacity-60"
       >
-        <GoogleG />
+        <span className="flex size-[22px] items-center justify-center rounded-[4px] bg-white">
+          <GoogleG />
+        </span>
         {pending ? "opening google" : "continue with google"}
       </button>
 
       {error && (
         <p
           role="alert"
-          className="mt-5 rounded-2xl bg-ember px-4 py-3 text-[14px] leading-[1.55] text-flame-dark"
+          className="mt-3 rounded-md border border-ink bg-shell px-3 py-2 text-[12.5px] leading-[1.5]"
         >
           {error}
         </p>
       )}
 
-      <p className="mt-7 text-center text-[13.5px] leading-[1.6] text-ink-50">
-        use the google account your programme invited. no account is made here
-        on its own.
+      <p className="mt-4 text-[11.5px] leading-[1.55] text-ink-50">
+        no account is made here on its own.
       </p>
     </div>
   );
@@ -74,7 +77,7 @@ export function AuthForm({
 
 function GoogleG() {
   return (
-    <svg viewBox="0 0 18 18" className="size-[18px]" aria-hidden="true">
+    <svg viewBox="0 0 18 18" className="size-[14px]" aria-hidden="true">
       <path
         fill="#4285F4"
         d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z"

@@ -4,12 +4,15 @@ import { brand } from "@/lib/content";
 import { themeVars, type OrgBrand } from "@/lib/org";
 
 /**
- * The card both auth pages sit in. Wordmark up top, one panel, nothing else.
+ * The page both auth screens sit on. A mark, a line, and the one door.
  *
- * `tenant` is the white-label: on klypr.ugcflows.com the header is klypr's
- * logo and name and the accent is theirs, because a creator invited by an
- * agency should never meet our brand between the invite and their dashboard.
- * Null paints the product's own mark and palette, exactly as before.
+ * There is no card any more. A bordered panel floating on a grid-paper
+ * background was two frames drawn around a single button — the page has one
+ * thing on it, so the page IS the frame and the column just centres.
+ *
+ * `tenant` is the white-label: on a tenant host the mark and name are theirs,
+ * because somebody invited by a programme should not meet our brand between the
+ * invite and their dashboard. Null paints the product's own.
  */
 export function AuthShell({
   title,
@@ -24,37 +27,29 @@ export function AuthShell({
 }) {
   return (
     <main
-      className="grid-paper flex min-h-dvh flex-col justify-center px-5 py-12 sm:px-6 sm:py-16"
+      className="flex min-h-dvh flex-col justify-center bg-shell px-5 py-12"
       style={themeVars(tenant)}
     >
-      <div className="mx-auto w-full max-w-[480px]">
+      <div className="mx-auto w-full max-w-[340px]">
         <Link
           href="/"
-          className="mx-auto flex w-fit items-center gap-2.5 text-[19px] font-extrabold tracking-[-0.02em]"
+          className="flex w-fit items-center gap-2 text-[14px] font-bold tracking-[-0.01em]"
         >
-          {tenant?.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={tenant.logo_url}
-              alt=""
-              className="size-8 rounded-[9px] object-cover"
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src="/logo.png" alt="" className="size-9 rounded-[10px] object-cover" />
-          )}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={tenant?.logo_url || "/logo.png"}
+            alt=""
+            className="size-6 rounded-md object-cover"
+          />
           {tenant?.name ?? brand.wordmark}
         </Link>
 
-        <div className="mt-7 rounded-card border border-line bg-paper p-6 sm:mt-8 sm:p-10">
-          <h1 className="text-[clamp(1.5rem,4vw,1.9rem)] font-extrabold leading-[1.15] tracking-[-0.025em]">
-            {title}
-          </h1>
-          {sub && (
-            <p className="mt-3 text-[15px] leading-[1.6] text-ink-50">{sub}</p>
-          )}
-          {children}
-        </div>
+        <h1 className="mt-8 text-[22px] font-extrabold leading-[1.15] tracking-[-0.025em]">
+          {title}
+        </h1>
+        {sub && <p className="mt-1.5 text-[13px] leading-[1.55] text-ink-50">{sub}</p>}
+
+        {children}
       </div>
     </main>
   );
