@@ -1,9 +1,6 @@
 import Link from "next/link";
 import { EditingRequests } from "@/components/dash/editing-requests";
 import { DashBar, Page, barTitle } from "@/components/dash/ui";
-import { creditsLabel } from "@/lib/credits";
-import { loadCreditBalance } from "@/lib/credits-server";
-import { EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import { loadEditJobs } from "@/lib/editing-server";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +15,7 @@ export const dynamic = "force-dynamic";
  * server does not get asked again to hide four rows.
  */
 export default async function EditingPage() {
-  const [rows, balance] = await Promise.all([
-    loadEditJobs(),
-    // nothing to spend with the market off, so nothing to read.
-    EDITOR_MARKET_ENABLED ? loadCreditBalance() : Promise.resolve(0),
-  ]);
+  const rows = await loadEditJobs();
 
   return (
     <>
@@ -30,14 +23,6 @@ export default async function EditingPage() {
         lead={<h1 className={barTitle}>Editing</h1>}
         right={
           <div className="flex shrink-0 items-center gap-2.5">
-            {EDITOR_MARKET_ENABLED && (
-              <Link
-                href="/editing/credits"
-                className="flex h-9 items-center rounded-pill border border-line px-5 text-[14px] font-semibold text-ink-70 transition-colors hover:text-ink"
-              >
-                {creditsLabel(balance)}
-              </Link>
-            )}
             <Link
               href="/editing/new"
               className="flex h-9 items-center rounded-pill bg-flame px-5 text-[14px] font-semibold text-on-accent transition-colors hover:bg-flame-dark"

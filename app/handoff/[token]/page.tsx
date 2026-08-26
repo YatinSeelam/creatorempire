@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BrandMark } from "@/components/dash/brand-mark";
+import { DownloadAll } from "@/components/handoff/download-all";
 import { brandLogo } from "@/lib/brand-catalog";
 import { humanSize } from "@/lib/editing-files";
 import { HANDOFF_KIND_LABEL, FILE_KIND_LABEL } from "@/lib/editing-handoff";
@@ -235,6 +236,19 @@ export default async function HandoffPage({ params }: Props) {
   const hasShelf = room.shelf.length > 0;
   const hasSide = room.assets.length > 0 || room.docs.length > 0 || hasShelf;
 
+  // every file on the page, for the button that saves the lot. built here so
+  // the two "download all" buttons cannot disagree about what "all" means.
+  const saveable = (rows: RoomFile[]) =>
+    rows
+      .filter((f) => f.downloadUrl)
+      .map((f) => ({ name: f.name, url: f.downloadUrl as string }));
+  const everything = saveable([
+    ...room.footage,
+    ...room.assets,
+    ...room.docs,
+    ...room.shelf,
+  ]);
+
   return (
     <Shell>
       <div className="space-y-4">
@@ -277,6 +291,16 @@ export default async function HandoffPage({ params }: Props) {
             {room.label && <span>for {room.label}</span>}
           </div>
 
+          {everything.length > 1 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+              <p className="min-w-0 flex-1 text-[13px] leading-[1.6] text-ink-50">
+                {everything.length} files on this page, videos and assets
+                together. links last an hour, reload for fresh ones.
+              </p>
+              <DownloadAll files={everything} />
+            </div>
+          )}
+
           {room.closed && (
             <p className="mt-4 rounded-card border border-line bg-shell px-4 py-3 text-[13.5px] leading-[1.6] text-ink-50">
               this batch is finished. the files are still here to look at,
@@ -291,7 +315,7 @@ export default async function HandoffPage({ params }: Props) {
           )}
           {room.unsigned && (
             <p className="mt-4 rounded-card border border-line bg-shell px-4 py-3 text-[13.5px] leading-[1.6] text-ink-50">
-              the uploaded files cannot be handed over right now. ask whoever
+              the uploaded files are not coming through right now. ask whoever
               sent this link to send them another way.
             </p>
           )}
@@ -343,11 +367,11 @@ export default async function HandoffPage({ params }: Props) {
         <Card className="space-y-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className={LABEL}>The videos to cut</p>
-            <p className="text-[12.5px] text-ink-50">
-              {room.footage.length > 0
-                ? `${room.footage.length} file${room.footage.length === 1 ? "" : "s"}, links last an hour`
-                : "nothing uploaded"}
-            </p>
+            {room.footage.length > 0 ? (
+              <DownloadAll files={saveable(room.footage)} />
+            ) : (
+              <p className="text-[12.5px] text-ink-50">nothing uploaded</p>
+            )}
           </div>
 
           {room.footage.length === 0 ? (

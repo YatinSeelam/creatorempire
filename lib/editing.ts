@@ -353,17 +353,14 @@ export function asReelClips(value: unknown): ReelClip[] {
 }
 
 /**
- * What a bundle costs, in words: "10 videos, $2 each". The whole batch is one
- * bounty and one claim, so the per-video number is the one an editor is
- * actually deciding on.
+ * How big the batch is, in words: "10 videos". It used to carry the per-video
+ * price beside it, back when the batch was a bounty an editor claimed off a
+ * board. Nothing is priced here now, and a label reading "$0 each" is worse
+ * than one that never mentions money.
  */
-export function bundleLabel(
-  job: Pick<EditJob, "video_count" | "credits">
-): string {
+export function bundleLabel(job: Pick<EditJob, "video_count">): string {
   const n = Math.max(1, job.video_count);
-  const each = job.credits > 0 ? Math.round(job.credits / n) : 0;
-  if (n === 1) return `1 video · $${each}`;
-  return `${n} videos · $${each} each`;
+  return n === 1 ? "1 video" : `${n} videos`;
 }
 
 // ------------------------------------------------------------- reliability

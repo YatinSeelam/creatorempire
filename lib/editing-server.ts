@@ -27,8 +27,6 @@ import {
   type DealAsset,
 } from "@/lib/editing-files";
 import { brandLogo } from "@/lib/brand-catalog";
-import type { ReviewLink, ReviewNote } from "@/lib/editing-review";
-import { loadReviewLink, loadReviewNotes } from "@/lib/editing-review-server";
 import type { HandoffLink } from "@/lib/editing-handoff";
 import { loadHandoffLink } from "@/lib/editing-handoff-server";
 import { createClient } from "@/lib/supabase/server";
@@ -158,12 +156,8 @@ export type EditJobDetail = {
   payout: EditorPayout | null;
   /** "Brand · deal name" when the job is pinned to a deal. */
   dealLabel: string | null;
-  /** the client review link, null until the creator makes one. */
-  reviewLink: ReviewLink | null;
   /** the editor handoff link, null until the creator makes one. */
   handoffLink: HandoffLink | null;
-  /** what the client said on it, newest first. */
-  clientNotes: ReviewNote[];
 };
 
 export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
@@ -192,8 +186,6 @@ export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
     editorRes,
     dealRes,
     files,
-    reviewLink,
-    clientNotes,
     dealAssets,
     handoffLink,
   ] = await Promise.all([
@@ -224,8 +216,6 @@ export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
           .maybeSingle()
       : Promise.resolve({ data: null }),
     loadJobFiles(supabase, id),
-    loadReviewLink(supabase, id),
-    loadReviewNotes(supabase, id),
     loadDealAssets(supabase, job.deal_id),
     loadHandoffLink(supabase, id),
   ]);
@@ -254,8 +244,6 @@ export async function loadEditJob(id: string): Promise<EditJobDetail | null> {
     editor: editorRes.data ? normalizeEditor(editorRes.data as Record<string, unknown>) : null,
     payout,
     dealLabel: dealRow ? (dealRow.brand ? `${dealRow.brand.name} · ${dealRow.name}` : dealRow.name) : null,
-    reviewLink,
-    clientNotes,
     handoffLink,
   };
 }

@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { packById } from "@/lib/credits";
 import { createServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -100,14 +99,11 @@ async function handle(event: StripeEvent, supabase: Client) {
 
   switch (event.type) {
     case "checkout.session.completed": {
-      // a credits pack, not the subscription. the metadata was written by our
-      // own server when the session was created; the pack id is looked up
-      // again here so the amount granted can only ever be a real pack's.
+      // job credits are gone from this deploy: nothing is charged for an edit
+      // job any more, so nothing here can create a `job_credits` session. an
+      // old one still in stripe's retry window is dropped rather than granted.
       const meta = object.metadata as Record<string, unknown> | null | undefined;
-      if (str(meta?.kind) === "job_credits") {
-        await grantJobCredits(supabase, object, event.id);
-        return;
-      }
+      if (str(meta?.kind) === "job_credits") return;
 
       // the $14.99 starter kit, a one-time payment, not the subscription
       if (str(meta?.kind) === "starter_kit") {
@@ -230,50 +226,6 @@ async function handle(event: StripeEvent, supabase: Client) {
     default:
       // everything else is somebody else's problem
       return;
-  }
-}
-
-/**
- * A credits pack landing. The only writer of 'purchase' rows in
- * `job_credit_ledger`. The unique `stripe_session_id` column is the whole
- * idempotency story: stripe retries an event for three days, and the replay
- * hits the constraint and grants nothing twice.
- */
-async function grantJobCredits(
-  supabase: Client,
-  object: Record<string, unknown>,
-  eventId: string
-) {
-  if (str(object.payment_status) !== "paid") return;
-
-  const meta = (object.metadata ?? {}) as Record<string, unknown>;
-  const pack = packById(str(meta.pack) ?? "");
-  if (!pack) {
-    console.error("[stripe] credits session with unknown pack", eventId, meta.pack);
-    return;
-  }
-
-  const userId = await resolveUser(supabase, {
-    clientReferenceId: str(object.client_reference_id),
-    email:
-      str((object.customer_details as Record<string, unknown>)?.email) ??
-      str(object.customer_email),
-    customerId: str(object.customer),
-  });
-  if (!userId) return;
-
-  const { error } = await supabase.from("job_credit_ledger").insert({
-    user_id: userId,
-    delta: pack.credits,
-    kind: "purchase",
-    stripe_session_id: str(object.id),
-    memo: `${pack.credits} credits · $${(pack.priceCents / 100).toFixed(0)} pack`,
-  });
-
-  // 23505 is the replay: the session already granted. anything else throws so
-  // stripe retries a grant that genuinely failed.
-  if (error && error.code !== "23505") {
-    throw new Error(`credits grant failed: ${error.message}`);
   }
 }
 

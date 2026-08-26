@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { BrandMark } from "@/components/dash/brand-mark";
 import { brandLogo } from "@/lib/brand-catalog";
-import { creditsLabel } from "@/lib/credits";
 import { bundleLabel, type EditJob, type JobStatus } from "@/lib/editing";
 import { shortDate } from "@/lib/money";
 
@@ -267,7 +266,7 @@ function RequestLine({ row }: { row: RequestRow }) {
             {job.title}
           </Link>
           <p className="mt-1 truncate text-[12.5px] text-ink-50">
-            {bundleLabel(job)} · {creditsLabel(job.credits)}
+            {bundleLabel(job)}
             {deliverableCount > 0 &&
               ` · ${deliverableCount} of ${job.video_count} back`}
           </p>

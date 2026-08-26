@@ -21,8 +21,6 @@ import {
 } from "@/lib/editing-files";
 import { createClient } from "@/lib/supabase/client";
 import {
-  creditsLabel,
-  jobCredits,
   TIER_HINT,
   TIER_LABEL,
   tierForKind,
@@ -32,7 +30,6 @@ import {
   type JobTier,
   type VideoKind,
 } from "@/lib/credits";
-import { EDITOR_MARKET_ENABLED } from "@/lib/editing";
 import type { LinkItem } from "@/lib/editing";
 
 const empty: EditingState = {};
@@ -110,11 +107,9 @@ type Staged = UploadedFile & { kind: JobFileKind };
  */
 export function NewJobWizard({
   deals,
-  balance,
   userId,
 }: {
   deals: PickerDeal[];
-  balance: number;
   /** the folder uploads land in before the job has an id: `user/<userId>/`. */
   userId: string;
 }) {
@@ -230,11 +225,6 @@ export function NewJobWizard({
   const shelfOf = (kind: "asset" | "doc") => shelf.filter((a) => a.kind === kind);
 
   const tier = tierForKind(kind);
-  const credits = jobCredits(tier, rush, videos);
-  const perVideo = tier + (rush ? 1 : 0);
-  // free with the market off: there is no board, no editor being hired through
-  // us, and nothing to pay for. the wallet is never read and never short.
-  const short = EDITOR_MARKET_ENABLED && balance < credits;
   const dealLabel = deals.find((d) => d.id === dealId)?.label ?? "no deal yet";
 
   return (
@@ -329,7 +319,6 @@ export function NewJobWizard({
                       onClick={() => setKind(k.value)}
                     >
                       {k.label}
-                      {EDITOR_MARKET_ENABLED && <Sub>${k.tier}</Sub>}
                     </Choice>
                   ))}
                 </Toggle>
@@ -343,7 +332,6 @@ export function NewJobWizard({
                   </Choice>
                   <Choice on={rush} onClick={() => setRush(true)}>
                     {turnaroundShort(true)}
-                    {EDITOR_MARKET_ENABLED && <Sub>+1</Sub>}
                   </Choice>
                 </Toggle>
                 {/* the checkbox is gone, so post the value the action reads. */}
@@ -631,11 +619,7 @@ export function NewJobWizard({
         <div className={step === 2 ? "flex flex-col gap-5" : "hidden"}>
           <Panel
             title="review"
-            hint={
-              EDITOR_MARKET_ENABLED
-                ? "cancel before an editor claims it and the credits come back."
-                : "post it, then send your editor the link. nothing is charged."
-            }
+            hint="post it, then send your editor the link. nothing is charged."
           >
             <dl className="divide-y divide-line">
               <Line label="brand deal" value={dealLabel} />
@@ -682,22 +666,15 @@ export function NewJobWizard({
       {/*
         The summary rail.
 
-        It came back, and this time it is not four fields restated: it is the
-        one thing that is true on every step and cannot be read off any of them
-        — what this batch costs — plus the button that leaves the step. A footer
-        per card put that button at the bottom of whichever card happened to be
-        tallest; here it is in the same place on all three, next to the number
-        it is about to spend.
+        Three lines of what the batch is, and the button that leaves the step. A
+        footer per card put that button at the bottom of whichever card happened
+        to be tallest; here it is in the same place on all three.
       */}
       <Summary
         step={step}
         videos={videos}
         tier={tier}
         rush={rush}
-        credits={credits}
-        perVideo={perVideo}
-        balance={balance}
-        short={short}
         state={state}
         onBack={() => setStep((n) => Math.max(0, n - 1))}
         onNext={() => setStep((n) => Math.min(2, n + 1))}
@@ -962,10 +939,6 @@ function Summary({
   videos,
   tier,
   rush,
-  credits,
-  perVideo,
-  balance,
-  short,
   state,
   onBack,
   onNext,
@@ -974,10 +947,6 @@ function Summary({
   videos: number;
   tier: JobTier;
   rush: boolean;
-  credits: number;
-  perVideo: number;
-  balance: number;
-  short: boolean;
   state: EditingState;
   onBack: () => void;
   onNext: () => void;
@@ -997,40 +966,9 @@ function Summary({
           </SumLine>
         </ul>
 
-        {EDITOR_MARKET_ENABLED && (
-        <div className="mt-5 border-t border-line pt-4">
-          <div className="flex items-baseline justify-between gap-3">
-            <span className="text-[15px] font-extrabold tracking-[-0.01em]">total</span>
-            <span
-              className={`text-[22px] font-extrabold tabular-nums tracking-[-0.02em] ${
-                short ? "text-flame-dark" : "text-flame"
-              }`}
-            >
-              {creditsLabel(credits)}
-            </span>
-          </div>
-          {/* the sum, not just the total. the per-video number is what a
-              creator compares against what they would pay anywhere else. */}
-          <p className="mt-1.5 flex items-baseline justify-between gap-3 text-[13px] tabular-nums text-ink-50">
-            <span>
-              {videos} × ${perVideo}
-            </span>
-            <span className={short ? "font-bold text-flame-dark" : ""}>
-              {creditsLabel(balance)} left
-            </span>
-          </p>
-        </div>
-        )}
-
-        {short && (
-          <p className="mt-3 rounded-xl bg-ember px-3.5 py-2.5 text-[12.5px] leading-[1.5] text-flame-dark">
-            not enough credits for this job.{" "}
-            <Link href="/editing/credits" className="font-semibold underline">
-              top up first
-            </Link>
-            , then come back and post it.
-          </p>
-        )}
+        {/* what used to be here was the total in credits and the balance left
+            after it. nothing is charged now, so the rail is the summary and the
+            button, and the button is the only thing it was ever really for. */}
 
         <div className="mt-5 flex flex-col gap-2.5">
           {step < 2 ? (
@@ -1193,15 +1131,6 @@ function Choice({
     >
       {children}
     </button>
-  );
-}
-
-/** The price hanging off a choice, quieter than the word it follows. */
-function Sub({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-[12px] font-semibold tabular-nums opacity-70">
-      {children}
-    </span>
   );
 }
 

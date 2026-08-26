@@ -10,10 +10,16 @@
  * the `handoff_link_room` rpc, which is security definer and whose projection
  * IS the access control — no pay, no credits, no owner, no cuts. The rpc hands
  * back bucket PATHS rather than urls, because a path into a private bucket is
- * worth nothing on its own; the only thing this file adds is signing them,
- * which needs a client that can read that bucket. That is the service key, used
- * here for the reason the review room uses it: the caller already proved a
- * capability (the token) no storage policy could have expressed.
+ * worth nothing on its own; the only thing this file adds is signing them.
+ *
+ * Signing runs on the CALLER's own client, anon or otherwise, and no service
+ * key is involved anywhere. The `editing_assets_handoff_read` policy in
+ * 20260825220000_handoff_downloads is what makes that work: it asks
+ * `handoff_object_readable(name)`, which says yes only to material published by
+ * a live handoff link and never to a cut. That is deliberate — the earlier
+ * version signed with `createServiceClient()`, so a deploy that had never been
+ * given SUPABASE_SECRET_KEY handed the editor a page of files it could not let
+ * them download, which is the whole feature failing on an env var.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -21,7 +27,6 @@ import { BUCKET, PLAYABLE } from "@/lib/editing-files";
 import type { LinkItem } from "@/lib/editing";
 import { asLinkItems } from "@/lib/editing";
 import type { HandoffLink } from "@/lib/editing-handoff";
-import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 
 // ------------------------------------------------------------ the dashboard
@@ -48,7 +53,7 @@ export type RoomFile = {
   name: string;
   mime: string | null;
   size_bytes: number | null;
-  /** signed for an hour, null when there is no service key to sign with. */
+  /** signed for an hour, null when the object is gone or storage refused it. */
   url: string | null;
   /** the same url with a download disposition, so a click saves the file. */
   downloadUrl: string | null;
@@ -87,7 +92,7 @@ export type HandoffRoom = {
   docs: RoomFile[];
   /** the brand deal's shelf, which is assets and docs kept once per brand. */
   shelf: RoomFile[];
-  /** true when uploaded files exist but nothing could be signed. */
+  /** true when uploaded files exist but none of them could be signed. */
   unsigned: boolean;
 };
 
@@ -127,7 +132,7 @@ export async function loadHandoffRoom(token: string): Promise<HandoffResult> {
 
   const rawFiles = (payload.files ?? []) as RawFile[];
   const rawShelf = (payload.shelf ?? []) as RawFile[];
-  const signed = await signPaths([
+  const signed = await signPaths(supabase, [
     ...rawFiles.map((f) => f.path),
     ...rawShelf.map((f) => f.path),
   ]);
@@ -196,25 +201,25 @@ export async function loadHandoffRoom(token: string): Promise<HandoffResult> {
 }
 
 /**
- * Bucket paths into signed urls, in one storage call.
+ * Bucket paths into signed urls, in one storage call, as whoever is asking.
  *
- * With no service key set the map comes back empty and the room says the files
- * cannot be handed over right now — degraded rather than broken, and the links
- * the creator pasted into the brief keep working either way.
+ * A path the policy refuses simply does not come back, so a cut that somehow
+ * reached this list would render as "unavailable" rather than as a link. Belt
+ * and braces: the rpc already filters cuts out by kind.
  */
-async function signPaths(paths: string[]): Promise<Map<string, string>> {
+async function signPaths(
+  supabase: SupabaseClient,
+  paths: string[]
+): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (paths.length === 0) return out;
 
-  const service = createServiceClient();
-  if (!service) {
-    console.error("[handoff] no service key, uploaded files cannot be handed over");
-    return out;
-  }
-
   // an hour is long enough to download a batch and short enough that a url
   // forwarded on is dead by the time it is somebody else's problem.
-  const { data } = await service.storage.from(BUCKET).createSignedUrls(paths, 3600);
+  const { data, error } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrls(paths, 3600);
+  if (error) console.error("[handoff] could not sign", error.message);
   for (const row of data ?? []) {
     if (row.path && row.signedUrl) out.set(row.path, row.signedUrl);
   }

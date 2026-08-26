@@ -1,60 +1,47 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Crumbs, DashBar, FoldPanel, Page, Panel, Pill } from "@/components/dash/ui";
 import { Submit } from "@/components/dash/form";
 import {
-  CommentForm,
   DeliveredCutUploader,
   EditJobForm,
   JobAssetUploader,
-  RevisionForm,
 } from "@/components/dash/editing-forms";
 import { BrandMark } from "@/components/dash/brand-mark";
-import { ClientNoteRow, ReviewLinkBox } from "@/components/dash/client-review";
 import { HandoffLinkBox } from "@/components/dash/handoff-link";
 import { CutPlayer, type PlayerCut } from "@/components/dash/cut-player";
-import { JobConversation } from "@/components/dash/job-conversation";
 import { JobStepper, type Step } from "@/components/dash/job-stepper";
-import { JobThread, JobTrail } from "@/components/editors/job-chat";
+import { JobTrail } from "@/components/editors/job-chat";
 import { RatingInput } from "@/components/editors/rating-input";
 import { approveEditJob, cancelEditJob, deleteEditJob, deleteJobFile } from "../actions";
 import { brandLogo } from "@/lib/brand-catalog";
-import { creditsLabel, turnaroundShort, TIER_LABEL } from "@/lib/credits";
+import { TIER_LABEL } from "@/lib/credits";
 import { fileFamily, humanSize, isImageFile } from "@/lib/editing-files";
 import {
   bundleLabel,
-  EDITOR_MARKET_ENABLED,
   JOB_STATUS_LABEL,
-  jobTotalCents,
-  payLabel,
   type JobStatus,
   type LinkItem,
 } from "@/lib/editing";
-import { reviewerName, VERDICT_LABEL, VERDICT_TONE } from "@/lib/editing-review";
 import { linkIsLive } from "@/lib/editing-handoff";
 import { loadDealOptions, loadEditJob } from "@/lib/editing-server";
-import { ago, money, shortDate } from "@/lib/money";
+import { ago, shortDate } from "@/lib/money";
 
 /**
  * One batch, from the creator's side.
  *
- * This page used to be nine panels stacked down one column: four date cards, the
- * brief, files, the editor, a list of deliverables, the client review, the
- * approve form, the payout, the chat and the trail. Everything was the same
- * width and the same weight, so the two things somebody actually opens it to do
- * — watch the cut, and answer whoever is waiting — were the fifth and eighth
- * things down.
+ * Two columns. LEFT is the work: the cut playing, the box the finished cut gets
+ * filed into, and the decision under it. RIGHT is the one person on the other
+ * end of this job — the editor, who has no account here and reads the whole
+ * batch off a handoff link.
  *
- * It is two columns now. LEFT is the work: the cut, playing, and the decision
- * under it. RIGHT is the talking, and the talking has exactly two sides that are
- * not the same person — the EDITOR who cuts it, and the CAMPAIGN MANAGER who
- * signs it off through a link with no login. Those are one panel with two tabs,
- * each holding everything you can do with that person: the editor's tab carries
- * the thread AND the revision request, the manager's carries their link AND
- * their notes AND the button that forwards one to the editor.
+ * There is no editor profile panel, no thread and no client review tab any
+ * more. This deploy hires nobody and nobody signs a cut off through us: the
+ * creator already has an editor, the link is how the batch reaches them, and
+ * whatever they say back they say in the chat they already share. What is left
+ * is the link, and the cut that comes back.
  *
  * Everything read once rather than acted on — the brief, the file shelf, the
- * offer, cancelling — folds.
+ * job's own settings, cancelling — folds.
  */
 
 const statusTone: Record<JobStatus, "flame" | "ink" | "quiet" | "line"> = {
@@ -104,91 +91,43 @@ export default async function EditJobPage({
   const detail = await loadEditJob(id);
   if (!detail) notFound();
 
-  const {
-    job,
-    deliverables,
-    files,
-    dealAssets,
-    events,
-    editor,
-    payout,
-    dealLabel,
-    reviewLink,
-    clientNotes,
-    handoffLink,
-  } = detail;
+  const { job, deliverables, files, dealAssets, events, dealLabel, handoffLink } =
+    detail;
   const open = job.status === "open";
   const cancelled = job.status === "cancelled";
   const reviewable = job.status === "delivered" || job.status === "revisions";
-
-  // the manager's inbox: unhandled first, everything else as history. the newest
-  // approval is what the approve strip leans on.
-  const openNotes = clientNotes.filter((n) => !n.handled_at);
-  const handledNotes = clientNotes.filter((n) => n.handled_at);
-  const clientSignOff = clientNotes.find((n) => n.verdict === "approved");
-  // the offer form only exists while open, so the picker is only loaded then.
+  // the job's settings form only exists while open, so the picker is only
+  // loaded then.
   const deals = open ? await loadDealOptions() : [];
-
-  const editorName = editor?.name || editor?.handle || "the editor";
-  // loadEditJob only ever returns a row whose user_id is the signed-in user, so
-  // the job's owner IS the viewer here. The thread needs an id to pick its side.
-  const viewerId = job.user_id;
-  const messageCount = events.filter((e) => e.kind === "comment").length;
 
   // ------------------------------------------------------------- the stepper
   //
-  // two spines, one shape. with the market on, a job waits for an editor to
-  // claim it and the editor delivers. with it off there is no board: the second
-  // step is the creator sending the handoff link to the editor they already
-  // have, and the third is the creator filing what came back.
+  // four steps, and the middle two are the whole product: send the link, file
+  // what comes back. nothing on this page waits on us.
   const handedOff = Boolean(handoffLink && linkIsLive(handoffLink));
-  const claimed = EDITOR_MARKET_ENABLED ? Boolean(job.claimed_at) : handedOff;
-  // a job sitting in `revisions` HAS a cut, but the cut is not the state of
-  // play — it went back. so that step un-completes rather than the next one
-  // lighting up and asking for a call nobody can make yet.
-  const delivered = deliverables.length > 0 && job.status !== "revisions";
+  const delivered = deliverables.length > 0;
   const approved = Boolean(job.approved_at);
-  const done = [true, claimed, delivered, approved];
+  const done = [true, handedOff, delivered, approved];
   const active = done.indexOf(false);
 
-  const stepLabels = EDITOR_MARKET_ENABLED
-    ? [
-        "Brief posted",
-        claimed ? "Editor on it" : "Waiting for an editor",
-        job.status === "revisions" ? "Changes with editor" : "Cut delivered",
-        approved ? "Approved" : "Your call",
-      ]
-    : [
-        "Brief posted",
-        handedOff ? "Handed over" : "Send it to your editor",
-        delivered ? "Cut filed" : "Waiting on the cut",
-        approved ? "Approved" : "Your call",
-      ];
-  const stepNotes = EDITOR_MARKET_ENABLED
-    ? [
-        shortDate(job.created_at),
-        claimed ? editorName : "open on the board",
-        delivered
-          ? `${deliverables.length} cut${deliverables.length === 1 ? "" : "s"}`
-          : job.sla_at
-            ? `due ${shortDate(job.sla_at)}`
-            : `${turnaroundShort(job.is_rush)} once claimed`,
-        approved
-          ? shortDate(job.approved_at as string)
-          : payout
-            ? `${money(payout.amount_cents)} ${payout.status}`
-            : "pay locks here",
-      ]
-    : [
-        shortDate(job.created_at),
-        handedOff
-          ? (handoffLink?.label ?? "link is live")
-          : "one link, everything on it",
-        delivered
-          ? `${deliverables.length} cut${deliverables.length === 1 ? "" : "s"} filed`
-          : "upload it when it lands",
-        approved ? shortDate(job.approved_at as string) : "mark it done",
-      ];
+  const stepLabels = [
+    "Brief posted",
+    handedOff ? "Link is live" : "Send it to your editor",
+    delivered ? "Cut filed" : "Waiting on the cut",
+    approved ? "Approved" : "Your call",
+  ];
+  const stepNotes = [
+    shortDate(job.created_at),
+    handedOff
+      ? handoffLink?.views
+        ? `opened ${handoffLink.views} time${handoffLink.views === 1 ? "" : "s"}`
+        : "not opened yet"
+      : "the link is off",
+    delivered
+      ? `${deliverables.length} cut${deliverables.length === 1 ? "" : "s"} filed`
+      : "upload it when it lands",
+    approved ? shortDate(job.approved_at as string) : "mark it done",
+  ];
   const steps: Step[] = stepLabels.map((label, i) => ({
     label,
     // a cancelled job is not mid-flight, so nothing on it is "now".
@@ -243,7 +182,7 @@ export default async function EditJobPage({
       />
 
       <Page className="space-y-6">
-        {/* where it is, on one rail, instead of four dates that all read Aug 22 */}
+        {/* where it is, on one rail, instead of four dates that all read the same */}
         <JobStepper steps={steps} />
 
         <div className="grid min-w-0 gap-5 lg:grid-cols-[1.5fr_1fr] lg:items-start">
@@ -254,17 +193,11 @@ export default async function EditJobPage({
             ) : (
               <Panel title="The cut">
                 <p className="py-6 text-center text-[13.5px] text-ink-50">
-                  {!EDITOR_MARKET_ENABLED
-                    ? cancelled
-                      ? "This job was cancelled. Nothing came back."
-                      : handedOff
-                        ? "Nothing filed yet. When your editor sends the cut back, drop it in below."
-                        : "Nothing filed yet. Send the handoff link to your editor to start."
-                    : open
-                      ? "Nothing back yet. This is on the board, first editor to claim it starts cutting."
-                      : cancelled
-                        ? "This job was cancelled. Nothing came back."
-                        : `Nothing back yet. ${editorName} has it, cuts land here versioned.`}
+                  {cancelled
+                    ? "This job was cancelled. Nothing came back."
+                    : handedOff
+                      ? "Nothing filed yet. When your editor sends the cut back, drop it in below."
+                      : "Nothing filed yet. Send the handoff link to your editor to start."}
                 </p>
               </Panel>
             )}
@@ -273,7 +206,7 @@ export default async function EditJobPage({
                 link has no login, so the cut comes back over whatever chat they
                 already use and this is where it gets filed. every drop is a new
                 version, so v2 goes through the same box. */}
-            {!EDITOR_MARKET_ENABLED && !cancelled && !approved && (
+            {!cancelled && !approved && (
               <Panel
                 title={playerCuts.length > 0 ? "File another version" : "File the cut"}
                 action={
@@ -288,39 +221,19 @@ export default async function EditJobPage({
               </Panel>
             )}
 
-            {/* the money action, on its own, directly under the thing it is a
-                verdict on. asking for changes is NOT here — that is a message
-                to the editor and it lives in the editor's tab with the rest of
-                what you say to them. */}
             {reviewable && (
               <Panel
                 title="Approve this cut"
-                sub={
-                  EDITOR_MARKET_ENABLED
-                    ? `Releases ${money(jobTotalCents(job))} to ${editorName}, out of credits you already spent.`
-                    : "Closes the batch out. Paying your editor is between you and them."
-                }
+                sub="Closes the batch out. Paying your editor is between you and them."
               >
                 <form action={approveEditJob} className="space-y-4">
                   <input type="hidden" name="job_id" value={job.id} />
-
-                  {clientSignOff && (
-                    <p className="rounded-card border border-line bg-ember px-4 py-3 text-[13.5px] leading-[1.6] text-flame-dark">
-                      {reviewerName(clientSignOff)} approved this{" "}
-                      {ago(clientSignOff.created_at)}. Your tap is the one that pays.
-                    </p>
-                  )}
 
                   <div className="rounded-card border border-line bg-shell px-4 py-4">
                     <RatingInput />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Submit pendingLabel="Approving">Approve</Submit>
-                    <p className="min-w-0 flex-1 text-[12.5px] text-ink-50">
-                      A delivered cut left sitting approves itself after 48 hours.
-                    </p>
-                  </div>
+                  <Submit pendingLabel="Approving">Approve</Submit>
                 </form>
               </Panel>
             )}
@@ -330,12 +243,7 @@ export default async function EditJobPage({
               // worth having open while nobody is cutting yet, because it is
               // still the thing you would be editing. closed once it is out of
               // your hands and the page is about what came back.
-              open={!claimed}
-              action={
-                EDITOR_MARKET_ENABLED ? (
-                  <span className="text-[13px] text-ink-50">{payLabel(job)}</span>
-                ) : null
-              }
+              open={!handedOff}
             >
               <div className="space-y-4">
                 {/* a job is a batch, not one cut, and every other number on this
@@ -345,9 +253,7 @@ export default async function EditJobPage({
                     {bundleLabel(job)}
                   </p>
                   <span className="text-[13px] text-ink-50">
-                    {EDITOR_MARKET_ENABLED
-                      ? "one claim, one editor, the whole batch"
-                      : "one link, one editor, the whole batch"}
+                    one link, one editor, the whole batch
                   </span>
                 </div>
 
@@ -362,19 +268,10 @@ export default async function EditJobPage({
                 )}
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {EDITOR_MARKET_ENABLED ? (
-                    job.credits > 0 && (
-                      <Pill tone="flame">
-                        {creditsLabel(job.credits)} · {TIER_LABEL[job.tier]}
-                        {job.is_rush ? " · rush" : ""}
-                      </Pill>
-                    )
-                  ) : (
-                    <Pill tone="flame">
-                      {TIER_LABEL[job.tier]}
-                      {job.is_rush ? " · rush" : ""}
-                    </Pill>
-                  )}
+                  <Pill tone="flame">
+                    {TIER_LABEL[job.tier]}
+                    {job.is_rush ? " · rush" : ""}
+                  </Pill>
                   {dealLabel && <Pill tone="quiet">{dealLabel}</Pill>}
                 </div>
 
@@ -387,12 +284,12 @@ export default async function EditJobPage({
 
             <FoldPanel
               title="Files"
-              open={files.length === 0 && !claimed}
+              open={files.length === 0 && !handedOff}
               action={
                 <span className="text-[13px] text-ink-50">
                   {files.length > 0
                     ? `${files.length} file${files.length === 1 ? "" : "s"}`
-                    : "private to you and the editor"}
+                    : "everything here shows up on the link"}
                 </span>
               }
             >
@@ -504,10 +401,10 @@ export default async function EditJobPage({
             {open && (
               <>
                 <FoldPanel
-                  title="The offer"
+                  title="The job"
                   action={
                     <span className="text-[13px] text-ink-50">
-                      editable until somebody claims it
+                      changes show on the link straight away
                     </span>
                   }
                 >
@@ -519,9 +416,8 @@ export default async function EditJobPage({
                     <form action={cancelEditJob} className="flex flex-wrap items-center gap-4">
                       <input type="hidden" name="job_id" value={job.id} />
                       <p className="min-w-0 flex-1 text-[13.5px] text-ink-50">
-                        {EDITOR_MARKET_ENABLED
-                          ? "Cancel takes it off the board, keeps the job on your list, and refunds the credits it spent."
-                          : "Cancel kills the handoff link and keeps the job on your list."}
+                        Cancel turns the handoff link off and keeps the job on your
+                        list.
                       </p>
                       <Submit tone="line" size="sm" pendingLabel="Cancelling">
                         Cancel job
@@ -530,9 +426,8 @@ export default async function EditJobPage({
                     <form action={deleteEditJob} className="flex flex-wrap items-center gap-4">
                       <input type="hidden" name="job_id" value={job.id} />
                       <p className="min-w-0 flex-1 text-[13.5px] text-ink-50">
-                        {EDITOR_MARKET_ENABLED
-                          ? "Delete refunds the credits and removes it and its thread for good. Only an open job can go."
-                          : "Delete removes the job, its files and its links for good. Only an open job can go."}
+                        Delete removes the job, its files and its link for good. Only an
+                        open job can go.
                       </p>
                       <Submit tone="line" size="sm" pendingLabel="Deleting">
                         Delete this job
@@ -544,205 +439,39 @@ export default async function EditJobPage({
             )}
           </div>
 
-          {/* ================================================ the talking */}
+          {/* ================================================== the editor */}
           <div className="min-w-0 space-y-5">
-            <JobConversation
-              editorLabel={EDITOR_MARKET_ENABLED && editor ? editorName : "Editor"}
-              editorCount={EDITOR_MARKET_ENABLED ? messageCount : 0}
-              managerCount={openNotes.length}
-              // open on whichever side is actually waiting for something.
-              initial={openNotes.length > 0 ? "manager" : "editor"}
-              editor={
-                !EDITOR_MARKET_ENABLED ? (
-                  // no board and no editor account on this deploy. the tab that
-                  // held a claim and a thread holds the one thing that replaces
-                  // both: the url the batch lives on.
-                  <div className="space-y-5">
-                    <div>
-                      <p className={LABEL}>Their link</p>
-                      <p className="mb-3 mt-1 text-[13px] leading-[1.6] text-ink-50">
-                        Everything on this job on one page: the brief, the
-                        videos, the assets, the brand&apos;s kit, all
-                        downloadable. No account, no login, and they never see
-                        what you are paying.
-                      </p>
-                      <HandoffLinkBox jobId={job.id} link={handoffLink} />
-                    </div>
-
-                    <div className="space-y-2 border-t border-line pt-4">
-                      <p className={LABEL}>How it comes back</p>
-                      <p className="text-[13px] leading-[1.6] text-ink-50">
-                        Delivery is manual. Your editor sends the finished cut
-                        back the way they always do and you file it on the left.
-                        Anything you upload here shows up on their link straight
-                        away, so a missing asset does not need a new link.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                <div className="space-y-5">
-                  {editor ? (
-                    <div className="flex flex-wrap items-center gap-3">
-                      {editor.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={editor.avatar_url}
-                          alt=""
-                          className="size-10 shrink-0 rounded-full border border-line object-cover"
-                        />
-                      ) : (
-                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-shell text-[15px] font-bold text-ink-50">
-                          {editorName.slice(0, 1).toUpperCase()}
-                        </span>
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="truncate text-[14.5px] font-bold tracking-[-0.015em]">
-                            {editorName}
-                          </p>
-                          {editor.verified && <Pill tone="flame">verified</Pill>}
-                        </div>
-                        {editor.headline && (
-                          <p className="mt-0.5 truncate text-[12.5px] text-ink-50">
-                            {editor.headline}
-                          </p>
-                        )}
-                      </div>
-                      {editor.published && editor.handle && (
-                        <Link
-                          href={`/e/${editor.handle}`}
-                          className="shrink-0 rounded-pill border border-line px-3.5 py-1.5 text-[13px] font-semibold text-ink-70 transition-colors hover:text-ink"
-                        >
-                          Profile
-                        </Link>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-[13.5px] leading-[1.6] text-ink-50">
-                      {open
-                        ? "Nobody has claimed this yet. Open jobs sit on every editor's board, first claim wins."
-                        : "No editor attached."}
-                    </p>
-                  )}
-
-                  <div className="border-t border-line pt-4">
-                    <JobThread
-                      events={events}
-                      viewerId={viewerId}
-                      otherLabel={editorName}
-                    />
-                  </div>
-
-                  <div className="border-t border-line pt-4">
-                    <CommentForm jobId={job.id} />
-                  </div>
-
-                  {/* the revision request, in the editor's tab, because it is a
-                      message to the editor. it used to be a separate panel four
-                      cards away from the thread it is part of. */}
-                  {job.status === "delivered" && (
-                    <div className="space-y-3 border-t border-line pt-4">
-                      <p className={LABEL}>Ask for changes instead</p>
-                      <RevisionForm job={job} />
-                    </div>
-                  )}
-                </div>
-                )
+            <Panel
+              title="Your editor"
+              action={
+                <span className="text-[13px] text-ink-50">
+                  {handedOff ? "link is live" : "link is off"}
+                </span>
               }
-              manager={
-                <div className="space-y-5">
-                  {cancelled ? (
-                    <p className="text-[13.5px] text-ink-50">
-                      This job was cancelled, so there is nothing to review.
-                    </p>
-                  ) : (
-                    <>
-                      <div>
-                        <p className={LABEL}>Their link</p>
-                        <p className="mb-3 mt-1 text-[13px] leading-[1.6] text-ink-50">
-                          Whoever signs this off watches the cuts here and says approve
-                          or changes. No account, no login, and they never see what you
-                          paid.
-                        </p>
-                        <ReviewLinkBox jobId={job.id} link={reviewLink} />
-                      </div>
-
-                      {openNotes.length > 0 && (
-                        <div className="space-y-3 border-t border-line pt-4">
-                          <p className={LABEL}>Waiting on you</p>
-                          {openNotes.map((note) => (
-                            <ClientNoteRow
-                              key={note.id}
-                              jobId={job.id}
-                              note={note}
-                              canForward={job.status === "delivered"}
-                              directionUsed={job.change_rounds >= 1}
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {reviewLink && clientNotes.length === 0 && (
-                        <p className="border-t border-line pt-4 text-[13.5px] text-ink-50">
-                          Nothing back from them yet.
-                        </p>
-                      )}
-
-                      {handledNotes.length > 0 && (
-                        <div className="space-y-3 border-t border-line pt-4">
-                          <p className={LABEL}>Already dealt with</p>
-                          <ul className="space-y-2.5">
-                            {handledNotes.map((note) => (
-                              <li key={note.id} className="min-w-0">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <span className="text-[13.5px] font-bold tracking-[-0.015em]">
-                                    {reviewerName(note)}
-                                  </span>
-                                  <Pill tone={VERDICT_TONE[note.verdict]}>
-                                    {VERDICT_LABEL[note.verdict]}
-                                  </Pill>
-                                  <span className="text-[12.5px] text-ink-50">
-                                    {ago(note.created_at)}
-                                  </span>
-                                </div>
-                                {note.body && (
-                                  <p className="mt-0.5 whitespace-pre-wrap text-[13.5px] leading-[1.6] text-ink-70">
-                                    {note.body}
-                                  </p>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              }
-            />
-
-            {payout && (
-              <Panel
-                title="Payout"
-                action={<span className="text-[13px] text-ink-50">frozen at approval</span>}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[22px] font-extrabold tabular-nums tracking-[-0.02em]">
-                    {money(payout.amount_cents)}
+            >
+              <div className="space-y-5">
+                <div>
+                  <p className="mb-3 text-[13px] leading-[1.6] text-ink-50">
+                    Send them this. It opens the whole batch on one page: the
+                    brief, the videos, the assets, the brand&apos;s kit, all
+                    downloadable. No account, no login.
                   </p>
-                  <Pill tone={payout.status === "paid" ? "flame" : "quiet"}>
-                    {payout.status}
-                  </Pill>
+                  <HandoffLinkBox jobId={job.id} link={handoffLink} />
                 </div>
-                <p className="mt-1 text-[12.5px] leading-[1.6] text-ink-50">
-                  {payout.memo ?? "edit job"} · logged {shortDate(payout.created_at)}
-                  {payout.paid_at ? ` · paid ${shortDate(payout.paid_at)}` : ""} · the
-                  platform pays the editor, you already paid in credits
-                </p>
-              </Panel>
-            )}
 
-            <JobTrail events={events} viewerId={viewerId} />
+                <div className="space-y-2 border-t border-line pt-4">
+                  <p className={LABEL}>How it comes back</p>
+                  <p className="text-[13px] leading-[1.6] text-ink-50">
+                    Delivery is manual. Your editor sends the finished cut back
+                    the way they always do and you file it on the left. Anything
+                    you upload here shows up on their link straight away, so a
+                    missing asset does not need a new link.
+                  </p>
+                </div>
+              </div>
+            </Panel>
+
+            <JobTrail events={events} viewerId={job.user_id} />
           </div>
         </div>
       </Page>

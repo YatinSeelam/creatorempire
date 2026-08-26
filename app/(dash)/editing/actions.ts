@@ -1,26 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  tierForKind,
-  jobCredits,
-  packById,
-  turnaroundHours,
-  CREDIT_CENTS,
-} from "@/lib/credits";
-import { createPackCheckout } from "@/lib/credits-server";
-import {
-  EDITOR_MARKET_ENABLED,
-  jobTotalCents,
-  safeUrl,
-  type LinkItem,
-  type PayKind,
-} from "@/lib/editing";
-import { notifyJobPosted } from "@/lib/editing-notify";
-import { push } from "@/lib/notify-server";
-import { money, parseCount } from "@/lib/money";
+import { tierForKind } from "@/lib/credits";
+import { safeUrl, type LinkItem, type PayKind } from "@/lib/editing";
+import { parseCount } from "@/lib/money";
 import { createClient } from "@/lib/supabase/server";
 
 export type EditingState = { error?: string; ok?: string };
@@ -84,11 +68,14 @@ function readLinks(formData: FormData, prefix: string): LinkItem[] {
  * The fields create and edit share, parsed once so the two paths can never
  * disagree about what a valid job is.
  *
- * There is no pay field any more: the price is derived. Tier comes from what
- * the job actually is (how many sources, which extras are ticked), never from
- * a picker, because a self-declared "easy" gets farmed. The whole price is
- * `credits`, and `pay_cents` mirrors it at $1 a credit so every existing
- * money read (payLabel, jobTotalCents, the approve freeze) keeps working.
+ * There is no money on a job at all here. Nobody is hired through this app:
+ * the creator hands the batch to an editor they already pay, so `credits` and
+ * `pay_cents` are written as 0 and nothing reads them. The columns stay so a
+ * screen copied from ugc flows still lands.
+ *
+ * `tier` and `is_rush` survive because they are not prices, they are what the
+ * job IS: a reaction cut or a full edit, wanted normally or wanted fast. The
+ * editor reads both off the handoff link.
  */
 function readJobForm(
   formData: FormData
@@ -121,7 +108,6 @@ function readJobForm(
   // reaction is the full rate, so a missing or tampered field costs the
   // creator more rather than less.
   const tier = tierForKind(String(formData.get("video_kind") ?? ""));
-  const credits = jobCredits(tier, rush, videoCount);
 
   return {
     row: {
@@ -134,11 +120,12 @@ function readJobForm(
       format: null,
       footage_links: footage,
       reference_links: readLinks(formData, "reference"),
+      // no money on a job here. see the note above the function.
       pay_kind: "per_video",
-      pay_cents: (credits / Math.max(1, videoCount)) * CREDIT_CENTS,
+      pay_cents: 0,
       video_count: videoCount,
       tier,
-      credits,
+      credits: 0,
       is_rush: rush,
       // no due date picker any more: the turnaround IS the deadline. the
       // clock starts when an editor claims it (24h, 6h on a rush) and lives
@@ -327,7 +314,7 @@ export async function createEditJob(
   if ("error" in deal) return { error: deal.error };
 
   // the brand names the batch, the deal's own name is the fallback, and a job
-  // tied to neither still needs something on the board to read.
+  // tied to neither still needs something to read.
   const title = await nextBatchTitle(
     supabase,
     user.id,
@@ -348,48 +335,26 @@ export async function createEditJob(
     .single();
   if (error) return { error: error.message };
 
-  // pay for it out of the wallet. the rpc charges the job's own credits
-  // column under a per-user lock, so two tabs cannot both spend the last
-  // credit. if the wallet is short, the job comes straight back out: an
-  // unpaid job on the board would be work an editor does for nothing.
-  //
-  // nothing to pay for with the market off: there is no board and no editor
-  // being hired through us, the creator hands the batch to their own editor
-  // through a link. posting is free and the wallet is never touched.
-  const { error: spendError } = EDITOR_MARKET_ENABLED
-    ? (await supabase.rpc("spend_job_credits", { p_job: data.id }))
-    : { error: null };
-  if (spendError) {
-    await supabase.from("edit_jobs").delete().eq("id", data.id).eq("status", "open");
-    if (spendError.message.includes("not enough credits")) {
-      return {
-        error: `You need ${parsed.row.credits} credit${
-          parsed.row.credits === 1 ? "" : "s"
-        } for this job and you do not have them. Top up on the credits page first.`,
-      };
-    }
-    return { error: spendError.message };
-  }
-
-  // the files the form uploaded before this job had an id. after the spend, so
-  // a job that could not be paid for never collects rows on the way out.
+  // the files the form uploaded before this job had an id.
   await attachStagedFiles(supabase, data.id, user.id, formData);
 
-  // ping the editors' discord that work landed. best effort: the job is
-  // posted and paid whether or not the webhook answers. silent with the market
-  // off: there is no pool of editors watching that channel here.
-  // title and brand are named explicitly: they no longer live on `parsed.row`
-  // and spreading it alone would hand the ping an undefined title to slice.
-  if (EDITOR_MARKET_ENABLED)
-    await notifyJobPosted({
-      id: data.id,
-      title,
-      brand_name: deal.brand.brand_name,
-      ...parsed.row,
+  // the handoff link is minted here rather than waiting for a button, because
+  // a job without one is a job nobody can start: the link IS how the batch
+  // reaches the editor. it exists from the first render of the job page and
+  // the creator's only decision is when to paste it.
+  //
+  // best effort on purpose. a job that posted but could not mint a token is
+  // still a job, and the box on the page offers to make one.
+  const { data: token } = await supabase.rpc("new_link_token");
+  if (token) {
+    await supabase.from("edit_job_handoff_links").insert({
+      job_id: data.id,
+      user_id: user.id,
+      token: String(token),
     });
+  }
 
   revalidatePath("/editing");
-  revalidatePath("/editing/credits");
   redirect(`/editing/${data.id}`);
 }
 
@@ -440,11 +405,7 @@ export async function updateEditJob(
   return { ok: "Saved." };
 }
 
-/**
- * Cancel keeps the row and its history. Only while nobody has claimed it,
- * and the credits it spent come straight back: the refund rpc only pays out
- * on a cancelled, never-claimed job, and is idempotent per job.
- */
+/** Cancel keeps the row and its history. Only while the job is still open. */
 export async function cancelEditJob(formData: FormData): Promise<void> {
   const { supabase, user } = await authed();
   if (!user) return;
@@ -460,13 +421,18 @@ export async function cancelEditJob(formData: FormData): Promise<void> {
     .eq("status", "open")
     .select("id");
 
+  // the link dies with the job. a url already pasted into a chat is the only
+  // way this batch reaches anybody, so cancelling has to shut it.
   if (data?.length) {
-    await supabase.rpc("refund_job_credits", { p_job: id });
+    await supabase
+      .from("edit_job_handoff_links")
+      .update({ revoked_at: new Date().toISOString() })
+      .eq("job_id", id)
+      .eq("user_id", user.id);
   }
 
   revalidatePath(`/editing/${id}`);
   revalidatePath("/editing");
-  revalidatePath("/editing/credits");
 }
 
 export async function deleteEditJob(formData: FormData): Promise<void> {
@@ -476,11 +442,10 @@ export async function deleteEditJob(formData: FormData): Promise<void> {
   const id = text(formData.get("job_id"), 40);
   if (!id) return;
 
-  // open only. a claimed job carries somebody else's work and a cancelled one
-  // is the record of it; neither should vanish from a delete button. the row
-  // goes through cancelled on its way out so the refund rpc's own guard
-  // (cancelled, never claimed) can run before the delete; the refund row
-  // itself survives with job_id nulled by the fk.
+  // open only. a job that has been handed over carries somebody else's work and
+  // a cancelled one is the record of it; neither should vanish from a delete
+  // button. the row goes through cancelled on its way out so nothing observes
+  // a job blinking straight from open to gone.
   const { data } = await supabase
     .from("edit_jobs")
     .update({ status: "cancelled" })
@@ -490,140 +455,20 @@ export async function deleteEditJob(formData: FormData): Promise<void> {
     .select("id");
   if (!data?.length) return;
 
-  await supabase.rpc("refund_job_credits", { p_job: id });
+  // the link row goes with it on the fk cascade, so the url stops resolving.
   await supabase.from("edit_jobs").delete().eq("id", id).eq("status", "cancelled");
 
   revalidatePath("/editing");
-  revalidatePath("/editing/credits");
   redirect("/editing");
 }
 
-// ------------------------------------------------------------------ the loop
-
-/** Post into the job's thread. Either side reads it, RLS decides who writes. */
-export async function postJobComment(
-  _prev: EditingState,
-  formData: FormData
-): Promise<EditingState> {
-  const { supabase, user } = await authed();
-  if (!user) return { error: "Your session expired. Sign in again." };
-
-  const jobId = text(formData.get("job_id"), 40);
-  const body = text(formData.get("body"), 2000);
-  if (!jobId) return { error: "Missing job." };
-  if (!body) return { error: "Write the comment first." };
-
-  const { error } = await supabase.from("edit_job_events").insert({
-    job_id: jobId,
-    author_id: user.id,
-    kind: "comment",
-    body,
-  });
-  if (error) return { error: error.message };
-
-  revalidatePath(`/editing/${jobId}`);
-  return {};
-}
-
 /**
- * Send it back. Delivered only, and the note rides along as a status event.
+ * Mark the batch done.
  *
- * Revisions are included, but "included" means something specific. A `brief`
- * revision is "the cut does not match the brief" — unlimited and free,
- * because unfinished work is not a revision. A `direction` revision is "it
- * matches the brief, I want something different" — one round is included,
- * counted on the job, and after that the new direction is a new job. That
- * split is what keeps a $1 tier survivable for editors.
- */
-export async function requestRevisions(
-  _prev: EditingState,
-  formData: FormData
-): Promise<EditingState> {
-  const { supabase, user } = await authed();
-  if (!user) return { error: "Your session expired. Sign in again." };
-
-  const id = text(formData.get("job_id"), 40);
-  if (!id) return { error: "Missing job." };
-
-  const scope = oneOf(formData.get("scope"), ["brief", "direction"] as const, "brief");
-  const note = text(formData.get("note"), 1000);
-  if (!note) return { error: "Say what to change first. The editor works off this note." };
-
-  return sendBack(supabase, user.id, id, scope, note);
-}
-
-/**
- * The revision itself, shared by the creator's own form and by forwarding a
- * client's note off a review link. One copy on purpose: the two entry points
- * differ only in where the words came from, and the change-round accounting is
- * exactly the thing that must not fork.
- */
-async function sendBack(
-  supabase: Awaited<ReturnType<typeof authed>>["supabase"],
-  userId: string,
-  id: string,
-  scope: "brief" | "direction",
-  note: string
-): Promise<EditingState> {
-  const user = { id: userId };
-  const { data: job } = await supabase
-    .from("edit_jobs")
-    .select("id, title, status, change_rounds, revision_count, editor_id, is_rush")
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!job || job.status !== "delivered") {
-    return { error: "Only a delivered job can go back for revisions." };
-  }
-
-  if (scope === "direction" && Number(job.change_rounds) >= 1) {
-    return {
-      error:
-        "The included direction change is used on this job. A new direction is a new job.",
-    };
-  }
-
-  // the revision clock: the same clock the claim gave, so a rush job's second
-  // pass is a rush pass too. tracked for the editor's stats; `revision_count`
-  // is the number the revision-rate stat reads.
-  const { data } = await supabase
-    .from("edit_jobs")
-    .update({
-      status: "revisions",
-      revision_count: Number(job.revision_count ?? 0) + 1,
-      revision_requested_at: new Date().toISOString(),
-      sla_at: new Date(Date.now() + turnaroundHours(Boolean(job.is_rush)) * 3600_000).toISOString(),
-      sla_warned_at: null,
-      ...(scope === "direction" ? { change_rounds: Number(job.change_rounds) + 1 } : {}),
-    })
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .eq("status", "delivered")
-    .select("id");
-  if (!data?.length) return { error: "Only a delivered job can go back for revisions." };
-
-  await supabase.from("edit_job_events").insert({
-    job_id: id,
-    author_id: user.id,
-    kind: "status",
-    body:
-      scope === "direction"
-        ? `direction change requested (the included round): ${note}`
-        : `revisions requested (brief not met): ${note}`,
-  });
-
-  revalidatePath(`/editing/${id}`);
-  revalidatePath("/editing");
-  return { ok: "Sent back to the editor." };
-}
-
-/**
- * Approve, and freeze what it pays.
- *
- * The payout row stores `jobTotalCents()` as it is right now with the job's
- * title as the memo, and is never recomputed: same lesson as the deal payouts,
- * a bill already agreed must not move under a later edit. If a payout for this
- * job already exists (an earlier approve, a double click), no second row.
+ * Nobody is paid from here. There is no editor account on this deploy and no
+ * payout row to freeze: what the creator owes their editor is settled between
+ * them, wherever they already settle it. Approving is the status flip, the
+ * optional rating, and the line in the trail.
  */
 export async function approveEditJob(formData: FormData): Promise<void> {
   const { supabase, user } = await authed();
@@ -634,24 +479,21 @@ export async function approveEditJob(formData: FormData): Promise<void> {
 
   const { data: job } = await supabase
     .from("edit_jobs")
-    .select("id, title, pay_kind, pay_cents, video_count, status, editor_id")
+    .select("id, title, status")
     .eq("id", id)
     .eq("user_id", user.id)
     .maybeSingle();
 
-  // a job handed off through a link has no editor_id at all: the creator filed
-  // the cut themselves and there is nobody here to pay. approving it is the
-  // status flip and the review inbox, and nothing else.
   if (!job) return;
-  if (EDITOR_MARKET_ENABLED && !job.editor_id) return;
   if (job.status !== "delivered" && job.status !== "revisions") return;
 
-  // the two-tap review: an optional 1-5 on the way past. it feeds the
-  // editor's tier, so it lives on the job row, frozen with the approval.
+  // an optional 1-5 on the way past, frozen on the job row with the approval.
   const ratingRaw = Number(String(formData.get("rating") ?? ""));
   const rating =
     Number.isInteger(ratingRaw) && ratingRaw >= 1 && ratingRaw <= 5 ? ratingRaw : null;
 
+  // filtered on the status it was read at, so a second tap updates nothing and
+  // cannot write the trail twice.
   const { data: updated } = await supabase
     .from("edit_jobs")
     .update({
@@ -670,50 +512,6 @@ export async function approveEditJob(formData: FormData): Promise<void> {
     kind: "status",
     body: "approved",
   });
-
-  const { data: existing } = job.editor_id
-    ? await supabase.from("editor_payouts").select("id").eq("job_id", id).limit(1)
-    : { data: [{ id: "none" }] };
-
-  if (!existing?.length) {
-    await supabase.from("editor_payouts").insert({
-      job_id: id,
-      editor_id: job.editor_id,
-      user_id: user.id,
-      amount_cents: jobTotalCents({
-        pay_kind: job.pay_kind as PayKind,
-        pay_cents: Number(job.pay_cents),
-        video_count: Number(job.video_count),
-      }),
-      memo: job.title,
-    });
-  }
-
-  // approving IS the answer to whatever the client last said, so the review
-  // inbox empties with it rather than nagging about a note the job outran.
-  await supabase
-    .from("edit_job_review_notes")
-    .update({ handled_at: new Date().toISOString() })
-    .eq("job_id", id)
-    .is("handled_at", null);
-
-  // nobody to tell on a handoff job: the editor has no account here, and the
-  // creator approving it is the person who already knows.
-  if (job.editor_id)
-    await push({
-      userId: String(job.editor_id),
-      kind: "job_approved",
-      title: `${String(job.title)} was approved`,
-      body: `${money(
-        jobTotalCents({
-          pay_kind: job.pay_kind as PayKind,
-          pay_cents: Number(job.pay_cents),
-          video_count: Number(job.video_count),
-        })
-      )} is owed to you. request it from your desk whenever you like.`,
-      href: "/editors/payouts",
-      subject: id,
-    });
 
   revalidatePath(`/editing/${id}`);
   revalidatePath("/editing");
@@ -870,236 +668,6 @@ export async function deleteJobFile(formData: FormData): Promise<void> {
   await supabase.from("edit_job_files").delete().eq("id", fileId);
 
   if (jobId) revalidatePath(`/editing/${jobId}`);
-}
-
-// ------------------------------------------------------------------- credits
-
-/**
- * Buy a pack. Builds a stripe checkout session and sends the browser there;
- * the webhook is what actually grants the credits when the payment lands, so
- * a closed tab mid-checkout costs nothing and grants nothing.
- */
-export async function buyCreditsPack(
-  _prev: EditingState,
-  formData: FormData
-): Promise<EditingState> {
-  const { user } = await authed();
-  if (!user) return { error: "Your session expired. Sign in again." };
-
-  const pack = packById(String(formData.get("pack") ?? ""));
-  if (!pack) return { error: "Pick a pack." };
-
-  const origin =
-    (await headers()).get("origin") ??
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    "https://www.creatorempire.app";
-
-  const result = await createPackCheckout({
-    pack,
-    userId: user.id,
-    email: user.email ?? null,
-    origin,
-  });
-  if ("error" in result) return { error: result.error };
-
-  redirect(result.url);
-}
-
-// ------------------------------------------------------------------- payouts
-
-/** The payer's word alone, which is why editors have no update policy. */
-export async function markPayoutPaid(formData: FormData): Promise<void> {
-  const { supabase, user } = await authed();
-  if (!user) return;
-
-  const payoutId = text(formData.get("payout_id"), 40);
-  const jobId = text(formData.get("job_id"), 40);
-  if (!payoutId) return;
-
-  const { data: paid } = await supabase
-    .from("editor_payouts")
-    .update({ status: "paid", paid_at: new Date().toISOString() })
-    .eq("id", payoutId)
-    .eq("status", "due")
-    .select("editor_id, amount_cents, memo");
-
-  // only on the transition. the `status = due` filter above means a second
-  // click updates nothing and returns no rows, so this cannot ring twice.
-  const row = (paid ?? [])[0];
-  if (row) {
-    await push({
-      userId: String(row.editor_id),
-      kind: "payout_paid",
-      title: `${money(Number(row.amount_cents))} was sent`,
-      body: (row.memo as string | null) ?? "edit job",
-      href: "/editors/payouts",
-      subject: jobId,
-    });
-  }
-
-  if (jobId) revalidatePath(`/editing/${jobId}`);
-  revalidatePath("/editing");
-}
-
-// ------------------------------------------------------------- review links
-
-/**
- * Make the job's client review link, or rotate it.
- *
- * One link per job, and rotating replaces the token in place — which is the
- * whole revoke story for a url that already went out: the old one stops
- * resolving the moment the new one exists. The token comes from
- * `new_review_token()` in postgres rather than from here, so nothing about how
- * it is generated depends on which runtime happened to call.
- */
-export async function createReviewLink(
-  _prev: EditingState,
-  formData: FormData
-): Promise<EditingState> {
-  const { supabase, user } = await authed();
-  if (!user) return { error: "Your session expired. Sign in again." };
-
-  const jobId = text(formData.get("job_id"), 40);
-  if (!jobId) return { error: "Missing job." };
-  const label = text(formData.get("label"), 80);
-  const rotate = String(formData.get("rotate") ?? "") === "1";
-
-  // proves the job is this creator's before anything is written. the insert
-  // would be caught by rls anyway, but a clean message beats a policy error.
-  const { data: job } = await supabase
-    .from("edit_jobs")
-    .select("id")
-    .eq("id", jobId)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!job) return { error: "That job is not yours." };
-
-  const { data: token, error: tokenError } = await supabase.rpc("new_review_token");
-  if (tokenError || !token) return { error: "Could not mint a link. Try again." };
-
-  const { data: existing } = await supabase
-    .from("edit_job_review_links")
-    .select("id, label")
-    .eq("job_id", jobId)
-    .maybeSingle();
-
-  if (existing && !rotate) {
-    // already there: this call is only editing the label
-    const { error } = await supabase
-      .from("edit_job_review_links")
-      .update({ label, updated_at: new Date().toISOString() })
-      .eq("id", existing.id);
-    if (error) return { error: error.message };
-    revalidatePath(`/editing/${jobId}`);
-    return { ok: "Saved." };
-  }
-
-  const { error } = await supabase.from("edit_job_review_links").upsert(
-    {
-      job_id: jobId,
-      user_id: user.id,
-      token: String(token),
-      // the rotate form carries no label field, and rotating is not a rename:
-      // without this the "acme campaign manager" note is wiped by a new url.
-      label: label ?? ((existing?.label as string | null) ?? null),
-      revoked_at: null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "job_id" }
-  );
-  if (error) return { error: error.message };
-
-  revalidatePath(`/editing/${jobId}`);
-  return {
-    ok: rotate ? "New link made. The old one is dead." : "Link ready. Send it over.",
-  };
-}
-
-/** Turn the link off or back on without changing the token. */
-export async function toggleReviewLink(formData: FormData): Promise<void> {
-  const { supabase, user } = await authed();
-  if (!user) return;
-
-  const jobId = text(formData.get("job_id"), 40);
-  if (!jobId) return;
-  const off = String(formData.get("off") ?? "") === "1";
-
-  await supabase
-    .from("edit_job_review_links")
-    .update({
-      revoked_at: off ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("job_id", jobId)
-    .eq("user_id", user.id);
-
-  revalidatePath(`/editing/${jobId}`);
-}
-
-/**
- * Pass the client's note straight through to the editor.
- *
- * The creator picks the scope, not the client, because that is the decision
- * that costs money: a `brief` round is free and unlimited, a `direction` round
- * is the one included change and after it a new direction is a new job. A
- * stranger with a url cannot be the one spending that.
- */
-export async function forwardClientNote(
-  _prev: EditingState,
-  formData: FormData
-): Promise<EditingState> {
-  const { supabase, user } = await authed();
-  if (!user) return { error: "Your session expired. Sign in again." };
-
-  const jobId = text(formData.get("job_id"), 40);
-  const noteId = text(formData.get("note_id"), 40);
-  if (!jobId || !noteId) return { error: "Missing note." };
-
-  const scope = oneOf(formData.get("scope"), ["brief", "direction"] as const, "brief");
-
-  const { data: note } = await supabase
-    .from("edit_job_review_notes")
-    .select("id, body, reviewer_name, job_id")
-    .eq("id", noteId)
-    .eq("job_id", jobId)
-    .maybeSingle();
-  if (!note?.body) return { error: "That note has nothing in it to send." };
-
-  const who = (note.reviewer_name as string | null)?.trim() || "the client";
-  const result = await sendBack(
-    supabase,
-    user.id,
-    jobId,
-    scope,
-    `from ${who}: ${String(note.body).slice(0, 900)}`
-  );
-  if (result.error) return result;
-
-  await supabase
-    .from("edit_job_review_notes")
-    .update({ handled_at: new Date().toISOString() })
-    .eq("id", noteId);
-
-  revalidatePath(`/editing/${jobId}`);
-  return { ok: "Sent to the editor." };
-}
-
-/** File a note away without acting on it. */
-export async function dismissClientNote(formData: FormData): Promise<void> {
-  const { supabase, user } = await authed();
-  if (!user) return;
-
-  const jobId = text(formData.get("job_id"), 40);
-  const noteId = text(formData.get("note_id"), 40);
-  if (!jobId || !noteId) return;
-
-  await supabase
-    .from("edit_job_review_notes")
-    .update({ handled_at: new Date().toISOString() })
-    .eq("id", noteId)
-    .eq("job_id", jobId);
-
-  revalidatePath(`/editing/${jobId}`);
 }
 
 // ---------------------------------------------------------- handoff links

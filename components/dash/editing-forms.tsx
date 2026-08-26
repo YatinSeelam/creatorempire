@@ -1,22 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useState, type ReactNode } from "react";
 import {
-  postJobComment,
   recordDealAsset,
   recordDeliveredCut,
   recordJobFile,
-  requestRevisions,
   updateEditJob,
   type EditingState,
 } from "@/app/(dash)/editing/actions";
 import { Area, Field, Label, Note, Select, Submit } from "@/components/dash/form";
 import { Dropzone } from "@/components/dropzone";
 import {
-  creditsLabel,
-  jobCredits,
   TIER_HINT,
   TIER_LABEL,
   tierForKind,
@@ -142,39 +137,32 @@ function Block({
  * on screen.
  *
  * A job is a BATCH, not a video: "5 cuts for Candle, same edit" is one row
- * with one brief, one claim and one clock. The form is built around that
- * number, because a creator who cannot see it posts five jobs and pays five
- * claims for work one editor would have done in one sitting.
+ * with one brief and one link. The form is built around that number, because a
+ * creator who cannot see it posts five jobs for work one editor would have done
+ * in one sitting.
  *
- * There is no pay field. The rate comes from one question, what kind of
- * videos: a reaction is 1 credit each, everything else is 2, rush adds 1.
- * Editing an existing job never re-prices it, because the credits were spent
- * when it was posted.
+ * There is no pay field and no price anywhere. Nobody is hired through this
+ * app: the creator already pays their editor, wherever they pay them. What is
+ * left of the old pricing question is what the job IS — a reaction cut or a
+ * full edit, wanted normally or wanted fast — because the editor reads both off
+ * the handoff link and cuts differently for each.
  */
 function JobFields({
   job,
   deals,
-  balance,
 }: {
   job?: EditJob;
   deals: PickerDeal[];
-  balance?: number;
 }) {
-  const priced = !job; // only a new job is being priced
-  // an existing job keeps whatever it was priced at, so the picker opens on
-  // the kind that matches its frozen tier rather than resetting to reaction.
+  // an existing job keeps what it was posted as, so the picker opens on the
+  // kind that matches its tier rather than resetting to reaction.
   const [kind, setKind] = useState<VideoKind>(
     job && job.tier === 1 ? "reaction" : "standard"
   );
-  const [rush, setRush] = useState(false);
+  const [rush, setRush] = useState(job?.is_rush ?? false);
   const [videos, setVideos] = useState(job?.video_count ?? 1);
 
   const tier = tierForKind(kind);
-  const credits = jobCredits(tier, rush, videos);
-  const short = priced && balance !== undefined && balance < credits;
-  // the number the batch is actually priced off. 1 credit = $1 of editor pay,
-  // so this is also what an editor sees per cut when they read the board.
-  const perVideo = tier + (rush ? 1 : 0);
 
   return (
     <div className="space-y-6">
@@ -251,14 +239,13 @@ function JobFields({
         />
       </Block>
 
-      {priced ? (
-        <Block
-          title="What it costs"
-          hint="Priced per video and spent when you post. Cancel before an editor claims it and the credits come straight back."
-        >
+      <Block
+        title="What kind of edit"
+        hint="What your editor is being asked for. It rides along on the handoff link."
+      >
           {/* one question, two answers. the four "does it need b-roll" boxes
               that used to live here were ticked on essentially every job, so
-              they priced nothing and just made the form longer. */}
+              they said nothing and just made the form longer. */}
           <div>
             <Label>What kind of videos</Label>
             <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
@@ -280,7 +267,6 @@ function JobFields({
                     }`}
                   >
                     {k.label}
-                    <span className="tabular-nums">${k.tier}</span>
                   </span>
                   <span className="mt-0.5 block text-[12.5px] leading-[1.45] text-ink-50">
                     {k.blurb}
@@ -299,67 +285,14 @@ function JobFields({
               onChange={(e) => setRush(e.target.checked)}
               className="accent-flame"
             />
-            Rush it (6h turnaround, +1 credit per video)
+            Rush it, 6 hour turnaround
           </label>
 
-          {/* -------------------------------------------------- the price */}
-          <div className="rounded-card border border-line bg-shell px-5 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-50">
-                  This batch costs
-                </p>
-                {/* the sum, not just the total: the per-video number is what a
-                    creator compares against what they would pay elsewhere. */}
-                <p className="mt-1 text-[24px] font-extrabold tabular-nums tracking-[-0.02em]">
-                  {videos} video{videos === 1 ? "" : "s"} x ${perVideo} ={" "}
-                  {creditsLabel(credits)}
-                </p>
-                <p className="mt-0.5 text-[13px] text-ink-50">
-                  {TIER_LABEL[tier]}
-                  {rush ? " · rush" : ""} · {TIER_HINT[tier]}
-                </p>
-              </div>
-              {balance !== undefined && (
-                <div className="text-right">
-                  <p className="text-[12px] font-semibold uppercase tracking-[0.14em] text-ink-50">
-                    Your balance
-                  </p>
-                  <p
-                    className={`mt-1 text-[20px] font-bold tabular-nums ${
-                      short ? "text-flame-dark" : ""
-                    }`}
-                  >
-                    {creditsLabel(balance)}
-                  </p>
-                </div>
-              )}
-            </div>
-            {short && (
-              <p className="mt-3 border-t border-line pt-3 text-[13.5px] text-flame-dark">
-                Not enough credits for this job.{" "}
-                <Link href="/editing/credits" className="font-semibold underline">
-                  Top up first
-                </Link>
-                , then come back and post it.
-              </p>
-            )}
-          </div>
-        </Block>
-      ) : (
-        <Block
-          title="What it cost"
-          hint="Frozen when the job was posted. Edits change the brief, never the price."
-        >
-          <div className="rounded-card border border-line bg-shell px-5 py-3.5 text-[13.5px] text-ink-50">
-            <b className="font-bold text-ink">{creditsLabel(job.credits)}</b> for{" "}
-            {job.video_count} video{job.video_count === 1 ? "" : "s"} (
-            {TIER_LABEL[job.tier]}
-            {job.is_rush ? " · rush" : ""}). Changing the count here does not re-price
-            the batch, so post a second job for videos this one never paid for.
-          </div>
-        </Block>
-      )}
+          <p className="text-[13px] leading-[1.5] text-ink-50">
+            {TIER_LABEL[tier]}
+            {rush ? " · rush" : ""} · {TIER_HINT[tier]}
+          </p>
+      </Block>
     </div>
   );
 }
@@ -376,73 +309,6 @@ export function EditJobForm({ job, deals }: { job: EditJob; deals: PickerDeal[] 
         <Submit pendingLabel="Saving">Save the job</Submit>
         <Note state={state} />
       </div>
-    </form>
-  );
-}
-
-/**
- * Send a delivered cut back. The scope choice is the revisions policy on
- * screen: brief-conformance fixes are unlimited, a change of mind gets the
- * one included round and the server counts it on the job.
- */
-export function RevisionForm({ job }: { job: EditJob }) {
-  const [state, action] = useActionState(requestRevisions, empty);
-  const [scope, setScope] = useState<"brief" | "direction">("brief");
-  const directionUsed = job.change_rounds >= 1;
-
-  return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name="job_id" value={job.id} />
-      <input type="hidden" name="scope" value={scope} />
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setScope("brief")}
-          aria-pressed={scope === "brief"}
-          className={`rounded-pill border px-3.5 py-1.5 text-[13px] font-semibold transition-colors ${
-            scope === "brief"
-              ? "border-flame bg-ember text-flame-dark"
-              : "border-line text-ink-50 hover:text-ink"
-          }`}
-        >
-          Doesn&apos;t match the brief
-        </button>
-        <button
-          type="button"
-          onClick={() => setScope("direction")}
-          aria-pressed={scope === "direction"}
-          disabled={directionUsed}
-          className={`rounded-pill border px-3.5 py-1.5 text-[13px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-            scope === "direction"
-              ? "border-flame bg-ember text-flame-dark"
-              : "border-line text-ink-50 hover:text-ink"
-          }`}
-        >
-          {directionUsed ? "Direction change used" : "I want something different"}
-        </button>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-        <Field
-          label="What to change"
-          name="note"
-          placeholder={
-            scope === "brief"
-              ? "Point at the line in the brief that was missed"
-              : "The new direction, in one or two lines"
-          }
-          hint={
-            scope === "brief"
-              ? "Brief fixes are free and unlimited. The job is not done until it matches."
-              : "One direction change is included per job. After that, a new direction is a new job."
-          }
-        />
-        <div className="pb-[22px]">
-          <Submit tone="line" pendingLabel="Sending">
-            Request revisions
-          </Submit>
-        </div>
-      </div>
-      <Note state={state} />
     </form>
   );
 }
@@ -538,33 +404,6 @@ export function JobAssetUploader({
         onDone={() => router.refresh()}
       />
     </div>
-  );
-}
-
-/** The post box at the bottom of the thread. */
-export function CommentForm({ jobId }: { jobId: string }) {
-  const [state, action] = useActionState(postJobComment, empty);
-
-  return (
-    <form action={action} className="flex flex-wrap items-end gap-3">
-      <input type="hidden" name="job_id" value={jobId} />
-      <div className="min-w-0 flex-1">
-        <Area
-          label="Say something"
-          name="body"
-          rows={2}
-          placeholder="Notes, questions, timestamps."
-        />
-      </div>
-      <div className="pb-[2px]">
-        <Submit size="sm" pendingLabel="Sending">
-          Send
-        </Submit>
-      </div>
-      <div className="w-full">
-        <Note state={state} />
-      </div>
-    </form>
   );
 }
 

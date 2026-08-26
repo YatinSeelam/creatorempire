@@ -7,9 +7,6 @@
  * whoever holds it gets the whole batch on one page: the brief, the style, the
  * references, every uploaded video, the brand's shelf, downloadable.
  *
- * The mirror of the client review link, pointed the other way. That one goes to
- * the person who SIGNS OFF a cut; this one goes to the person who MAKES it.
- *
  * The room is read only, and that is the design. Delivery is manual — the
  * editor sends the finished file back however they always did, and the creator
  * files it on the job page. Nothing an anonymous url holder does can write a
@@ -18,8 +15,6 @@
  * Reads: app/handoff/[token]. Writes: app/(dash)/editing/actions.ts and the
  * one security-definer rpc in 20260825190000_editor_handoff_links.
  */
-
-import { linkIsLive, reviewBase } from "@/lib/editing-review";
 
 /** One row of `edit_job_handoff_links`. The token only reaches the owner. */
 export type HandoffLink = {
@@ -37,16 +32,27 @@ export type HandoffLink = {
 };
 
 /**
- * Same origin as the review link, and deliberately the same helper: both urls
- * get pasted into somebody else's chat, so both have to be absolute and both
- * have to be stable. One of them drifting is a dead link nobody notices.
+ * The origin every handoff link is built on. Same shape as the referral link
+ * in lib/earn.ts and for the same reason: this url gets pasted into somebody
+ * else's discord, so it has to be absolute and it has to be stable.
  */
-export function handoffUrl(token: string, base = reviewBase()): string {
+export function handoffBase(): string {
+  const raw = process.env.NEXT_PUBLIC_SITE_URL || "https://www.creatorempire.app";
+  return raw.replace(/\/+$/, "");
+}
+
+export function handoffUrl(token: string, base = handoffBase()): string {
   return `${base}/handoff/${token}`;
 }
 
 /** True while the link still opens: not revoked, not past its date. */
-export { linkIsLive };
+export function linkIsLive(
+  link: Pick<HandoffLink, "revoked_at" | "expires_at">
+): boolean {
+  if (link.revoked_at) return false;
+  if (link.expires_at && new Date(link.expires_at) <= new Date()) return false;
+  return true;
+}
 
 /** What a job's kind is called on the editor's page. */
 export const HANDOFF_KIND_LABEL: Record<number, string> = {
