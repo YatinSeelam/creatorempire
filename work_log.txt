@@ -1,3 +1,39 @@
+2026-08-28d — back onto creator empire's own database, and why
+
+signing in to creator empire landed on ugcflows.com/login reading "that sign-in
+did not finish in this browser". nothing in this repo redirects there: every
+ugcflows string under app/, lib/ and components/ is a comment. it was supabase.
+a project has ONE Site URL and an oauth redirect_to that is not on its allow
+list is silently replaced with it, and qtcwdvaoxrfojzaktwyg's Site URL is
+https://www.ugcflows.com. sharing an auth project with ugc flows is therefore
+not a preference, it is the thing that stops this app being separate.
+
+xgiifxrxmtyklwglpewb's Site URL is https://creatorempire.vercel.app, so it
+cannot happen there. the way to read either without the dashboard:
+GET /auth/v1/callback?error=access_denied and look at the Location header.
+
+so .env and all of vercel's production and preview are back on
+xgiifxrxmtyklwglpewb with org aa0129dd. the url and the org id move together
+always: 7927501b exists only in qtcw and aa0129dd only here, and a CE_ORG_ID
+its own database has never heard of means nobody holds a seat and the gate
+shuts quietly. .mcp.json follows the app rather than the old shared project.
+the previous .env is kept as .env.qtcw-backup-2026-08-28.
+
+the cost, measured before the switch rather than guessed: qtcw held 80
+profiles, 25 deals, 942 videos and 4552 daily snapshots; xgiifx held 2
+profiles, 2 deals and nothing scraped. that gap was real, and it was the wrong
+thing to optimise for. the first production cron on the corrected config
+synced 4 accounts and ingested 30 videos in 6 api calls with no failures, so
+this database fills itself from here.
+
+what i got wrong earlier in the day, twice, both the same shape: i changed half
+a config and verified the half i had changed. first the publishable key stayed
+on the dead project while i tested the cron, which uses the secret key. then i
+argued for the shared project on row counts without checking where its Site URL
+pointed. an env move touches every key, and it has to be exercised on the
+browser side as well as the service side.
+
+
 2026-08-28c — production was pointed at the dead project too
 
 reading the deployed bundle answered it without any credentials: NEXT_PUBLIC_*

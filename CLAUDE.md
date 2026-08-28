@@ -6,7 +6,15 @@
 
 the creator empire app: a standalone deploy of the ugc flows dashboard for ONE workspace. next 16 app router + react 19 + tailwind 4 + supabase. package name: `creatorempire`.
 
-**separate repo, separate deploy, shared database.** the supabase project is `qtcwdvaoxrfojzaktwyg`, the same one ugc flows uses, and that is on purpose rather than left over: creator empire is an org in it (`orgs.slug = 'creatorempire'`, `NEXT_PUBLIC_CE_ORG_ID`), every read is scoped to that org's seats by rls, and one google sign in covers both apps because the cookies derive from the shared api hostname. an older standalone project, `xgiifxrxmtyklwglpewb`, exists and is DEAD: it has its own `orgs` row, no `app_origin` column and no `video_stats`, and pointing a `.env` at it while holding the other project's keys is what "Invalid API key" out of the cron means. `.mcp.json` here points at `qtcwdvaoxrfojzaktwyg`, which is right. migration files still live in the ugc flows repo so the history stays in one place.
+**separate repo, separate deploy, separate database.** the supabase project is `xgiifxrxmtyklwglpewb`, creator empire's own, with its own `orgs` row (`slug = 'creator-empire'`, id `aa0129dd-…`, which is `NEXT_PUBLIC_CE_ORG_ID`). ugc flows' project is `qtcwdvaoxrfojzaktwyg` and creator empire does not use it.
+
+**sharing an auth project is what stopped this being separate, and it is not a preference.** a supabase project has ONE Site URL, and an oauth `redirect_to` that is not on its allow list is silently replaced with it. `qtcwdvaoxrfojzaktwyg`'s Site URL is `https://www.ugcflows.com`, so signing in to creator empire against that project landed on `ugcflows.com/login` reading "that sign-in did not finish in this browser". nothing in this repo redirected there — every `ugcflows` string under `app/`, `lib/` and `components/` is a comment. it was supabase's own fallback. `xgiifxrxmtyklwglpewb`'s Site URL is `https://creatorempire.vercel.app`, so it cannot happen.
+
+to read a project's Site URL without the dashboard: `GET /auth/v1/callback?error=access_denied` and look at the `Location` header. that is the one call that answers "where does a half-finished sign-in end up".
+
+the two projects have DIFFERENT `orgs` rows, so `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_CE_ORG_ID` move together, always. `7927501b-…` exists only in qtcw and `aa0129dd-…` only here; a CE_ORG_ID naming an org its database has never heard of means nobody holds a seat and the gate shuts, which is the safe failure and an confusing one to debug. the publishable key and the secret key are per project too: mixing a url from one with a key from the other is what "Invalid API key" out of the cron means.
+
+`.mcp.json` still points at `qtcwdvaoxrfojzaktwyg`, which is now the WRONG project for this app. migrations were written in the ugc flows repo while the database was shared; a schema change for creator empire now has to be applied to `xgiifxrxmtyklwglpewb`.
 
 this folder was cut from the ugc flows repo on 2026-08-25. the code is the same product with the marketing, the self serve plan and the agency builder removed, and the whole app pinned to one org.
 
