@@ -29,6 +29,18 @@ the routes for everything removed are deleted, not hidden: tools other than auto
 
 roles: `setMemberRole` in `app/(dash)/agency/actions.ts`, behind the `org_members_owner_update` policy (owner only, never the owner row, column scoped to `role`). that migration lives in the ugc flows repo like every other one.
 
+## where it deploys, and the two values that decide the shape
+
+vercel project `creatorempire`, production `https://creatorempire.vercel.app`, built from the `yatin` remote. env lives on the vercel project, not in the repo.
+
+**`NEXT_PUBLIC_SITE_URL` decides whether this app has a path prefix.** `lib/base-path.ts` reads the PATH off it, so a bare origin (what production is now) means `BASE_PATH` is `""` and the app serves at the root of its own host; `https://www.ugcflows.com/creatorempire` would mean the prefixed build behind the ugc flows proxy. it is a BUILD time value, inlined into the client bundles, so changing it is a rebuild rather than a restart.
+
+**`vercel.json`'s cron path has to agree with it.** it is a literal string vercel calls and nothing derives it from `BASE_PATH`, so a prefix in one and not the other is a cron that 404s every hour with no error anywhere and a sync queue nobody drains. it is `/api/cron/refresh` while SITE_URL is a bare origin. no comments in that file: the schema rejects unknown keys inside a cron entry.
+
+**a production env change needs a fresh BUILD, not a redeploy.** `vercel redeploy` reuses the artifact, and every `NEXT_PUBLIC_*` is already baked into it, so the old values survive. `vercel --prod` or a push.
+
+the fastest way to check what production is actually pointed at, with no credentials: fetch `/login`, pull the `/_next/static/*.js` chunks and grep them for the supabase ref. that is how the dead-project deploy was caught.
+
 ## what is switched off, and how it says so
 
 three things are hidden rather than deleted, because deleting them means a copy from ugc flows stops landing cleanly.

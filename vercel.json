@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "_comment": "no /creatorempire prefix. this deploy is standalone on its own host, so NEXT_PUBLIC_SITE_URL is a bare origin, lib/base-path.ts reads BASE_PATH as \"\" and the route sits at the root. put the prefix back only if this is ever served through the ugc flows proxy again, because a cron path that misses is a queue nobody drains and it fails silently.",
       "path": "/api/cron/refresh",
       "schedule": "0 * * * *"
     }
