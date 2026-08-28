@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
-import { barTitle, DashBar, Panel, Split } from "./ui";
+import { barTitle, DashBar, Panel, Pill, Split } from "./ui";
 import { PortfolioSite } from "@/components/portfolio/portfolio-site";
 import { importClip, savePortfolio } from "@/app/(dash)/portfolio/actions";
 import { CURATED_BRANDS, matchCuratedBrand, searchBrands } from "@/lib/brand-catalog";
@@ -226,6 +226,21 @@ export function PortfolioEditor({
   // together at each of the two places that need it, which was also wrong in
   // development, where the origin is http and on a port.
   const href = portfolioHref(draft.slug);
+  // Whether the address in the bar actually resolves.
+  //
+  // The public route serves `published` rows only, and it serves the SAVED
+  // slug, not the one being typed — so a draft, an unsaved publish toggle and a
+  // half-typed rename all point at a page that answers 404. Printing it as a
+  // link anyway is the app making a promise it cannot keep on the one screen
+  // whose whole job is to hand somebody an address, and it is exactly what a
+  // creator clicks first: the slug is pre-filled from their name, so the very
+  // first render already shows a plausible url for a row that does not exist.
+  //
+  // `saved`, never `draft`. `draft` is what is on screen; `saved` is what the
+  // server has, which is the only thing the public route can serve.
+  const live =
+    saved.published && saved.slug !== "" && saved.slug === draft.slug;
+
   const gaps = portfolioGaps(draft);
   const filled = filledSections(draft);
 
@@ -258,7 +273,12 @@ export function PortfolioEditor({
         lead={<h1 className={`shrink-0 ${barTitle}`}>Portfolio</h1>}
         right={
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <CopyLink url={url} href={href} onCopied={() => setCopiedAt(Date.now())} />
+            <CopyLink
+              url={url}
+              href={href}
+              live={live}
+              onCopied={() => setCopiedAt(Date.now())}
+            />
             {/* The sticky preview beside the form is for typing against. This
                 is for the last look before the link goes out: the whole page at
                 real device widths, on its own screen. It reads the saved row,
@@ -741,12 +761,15 @@ function CopiedToast({ show }: { show: boolean }) {
 function CopyLink({
   url,
   href,
+  live,
   onCopied,
 }: {
   /** what is printed: host and slug, no scheme */
   url: string;
   /** where it goes, scheme included */
   href: string;
+  /** false while the page this address names does not exist yet */
+  live: boolean;
   onCopied: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -762,6 +785,19 @@ function CopyLink({
       // is right there in the link, so there is nothing to recover from.
     }
   };
+
+  // not live: show the address, do not pretend it opens. no copy button either
+  // — a url that 404s is worse on a clipboard than not offered at all.
+  if (!live) {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <span className="truncate text-[14px] font-semibold text-ink-50 sm:text-[15px]">
+          {url}
+        </span>
+        <Pill tone="quiet">draft</Pill>
+      </span>
+    );
+  }
 
   return (
     <div className="flex min-w-0 items-center gap-0.5">
