@@ -1,3 +1,24 @@
+2026-08-28e — editing is shut for everybody now
+
+the founder bypass in app/(dash)/editing/layout.tsx meant the only person who
+ever opens this app saw the full marketplace while every student saw the
+coming-soon page. the one screen nobody could check was the one everybody else
+got. editing is not being rehearsed on this deploy, it is not wanted, so the
+bypass is gone and with it an am_i_admin round trip on every request under
+/editing.
+
+a gate on the section is worthless if something else still links into it, so
+the two dashboard doors went behind the same flag: the "get an edit" button in
+the toolbar and the "cuts waiting on you" attention card built in
+lib/dash-server.ts. the rail chip lost its founder exception too, since a chip
+that read differently for a founder would promise them a page they no longer
+get.
+
+the soon page lost its four-bullet feature list. that is a roadmap, and a
+roadmap for a section nobody has committed to shipping here is a promise that
+ages badly. it says coming soon and nothing else.
+
+
 2026-08-28d — back onto creator empire's own database, and why
 
 signing in to creator empire landed on ugcflows.com/login reading "that sign-in

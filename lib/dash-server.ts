@@ -28,6 +28,7 @@ import {
 } from "@/lib/deals";
 import { addDays, cycleFor, cycleLabel, monthStart, payBy, toDay } from "@/lib/cycles";
 import type { EarningsRange } from "@/lib/earnings-range";
+import { EDITING_ENABLED } from "@/lib/editing";
 import { money, shortDate } from "@/lib/money";
 
 /* -------------------------------------------------------------- shared bits */
@@ -860,7 +861,10 @@ export async function loadOverview(
       href: `/deals/${r.deal.id}/edit`,
     });
   }
-  if (jobsAwaitingReview > 0) {
+  // EDITING_ENABLED gates the card, not just the count. with editing off the
+  // count is only ever 0 anyway, but a row that can point at a coming-soon
+  // page should not be constructible in the first place.
+  if (EDITING_ENABLED && jobsAwaitingReview > 0) {
     attention.push({
       kind: "review",
       title: `${jobsAwaitingReview} cut${jobsAwaitingReview === 1 ? "" : "s"} waiting on you`,

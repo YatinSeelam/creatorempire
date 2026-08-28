@@ -17,6 +17,7 @@ import {
   type TrendDay,
 } from "@/lib/dash-server";
 import { asDay, toRange } from "@/lib/earnings-range";
+import { EDITING_ENABLED } from "@/lib/editing";
 import {
   PLATFORMS,
   PLATFORM_LABEL,
@@ -119,9 +120,14 @@ export default async function DashboardPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RangePicker active={range} from={earnings.from} to={earnings.to} />
-          <Link href="/editing/new" className={ghost}>
-            get an edit
-          </Link>
+          {/* "get an edit" is gone while EDITING_ENABLED is off. a primary
+              action on the busiest screen in the product that lands on a
+              coming-soon page is worse than no action at all. */}
+          {EDITING_ENABLED && (
+            <Link href="/editing/new" className={ghost}>
+              get an edit
+            </Link>
+          )}
           <Link href="/tools/autoposting" className={ghost}>
             new post
           </Link>

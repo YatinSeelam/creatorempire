@@ -219,12 +219,12 @@ export function SideNav({
   // the editing row stays on the rail while the feature is off, wearing the
   // word that says so. hiding it and then bringing it back reads as the app
   // changing shape under somebody; a `soon` chip is one row of honesty and the
-  // page behind it says the same thing at length. a founder sees the real
-  // thing, because they are the one rehearsing it.
+  // page behind it says the same thing at length.
+  //
+  // no founder exception. the layout has none either, so a chip that read
+  // differently for a founder would be promising them a page they do not get.
   const work = studentRows.map((row) =>
-    row.href === "/editing" && !EDITING_ENABLED && !isFounder
-      ? { ...row, badge: "soon" }
-      : row
+    row.href === "/editing" && !EDITING_ENABLED ? { ...row, badge: "soon" } : row
   );
 
   // everyone gets the work rows. running the programme adds a second group
