@@ -23,7 +23,7 @@ import {
 import { PLATFORMS, type Platform } from "@/lib/deals";
 import { ago, money, shortDate, views as compactViews } from "@/lib/money";
 import { ROLE_LABEL, type OrgRole } from "@/lib/org";
-import { portfolioUrl } from "@/lib/portfolio-schema";
+import { portfolioHref, portfolioUrl } from "@/lib/portfolio-schema";
 import { requireFounderView } from "@/lib/supabase/founder";
 import { microsToUsd } from "@/lib/usage-pricing";
 
@@ -163,7 +163,7 @@ export default async function AdminPersonPage({
             <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 text-[13.5px] font-semibold">
               {person.portfolio_slug && (
                 <a
-                  href={`https://${portfolioUrl(person.portfolio_slug)}`}
+                  href={portfolioHref(person.portfolio_slug)}
                   target="_blank"
                   rel="noreferrer"
                   className="text-flame transition-colors hover:text-flame-dark"

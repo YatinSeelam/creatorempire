@@ -14,8 +14,11 @@ export const brand = {
   name: "Creator Empire",
   wordmark: "creator empire",
   tagline: "Better paying brand deals, and the system that runs all of them.",
-  // the live domain. read from here rather than typed out, so a portfolio link
-  // and an email address can never disagree.
+  // NOT where this is served. the deploy answers on creatorempire.vercel.app
+  // and this domain resolves to nothing yet, so nothing that has to produce a
+  // working link reads it: a portfolio address comes off SITE_URL, through
+  // PORTFOLIO_DOMAIN in lib/portfolio-schema.ts. kept for the day the domain
+  // is pointed here, and for the contact address below, which is its own dns.
   domain: "creatorempire.app",
   // the one address on the app. support, privacy requests and legal questions
   // all land here, so it is written down once and read from everywhere.

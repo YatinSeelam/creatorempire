@@ -14,7 +14,6 @@ import Link from "next/link";
 import { barTitle, DashBar, Panel, Split } from "./ui";
 import { PortfolioSite } from "@/components/portfolio/portfolio-site";
 import { importClip, savePortfolio } from "@/app/(dash)/portfolio/actions";
-import { brand } from "@/lib/content";
 import { CURATED_BRANDS, matchCuratedBrand, searchBrands } from "@/lib/brand-catalog";
 // embeds AND importable both come from the embed module, never from
 // portfolio-import: that one is a server file and importing it here would drag
@@ -38,6 +37,8 @@ import {
   portfolioGaps,
   portfolioScore,
   portfolioUrl,
+  portfolioHref,
+  PORTFOLIO_DOMAIN,
   rowId,
   slugify,
   slugProblem,
@@ -221,6 +222,10 @@ export function PortfolioEditor({
   );
 
   const url = portfolioUrl(draft.slug);
+  // the same address with its scheme. built once here rather than pasted
+  // together at each of the two places that need it, which was also wrong in
+  // development, where the origin is http and on a port.
+  const href = portfolioHref(draft.slug);
   const gaps = portfolioGaps(draft);
   const filled = filledSections(draft);
 
@@ -253,7 +258,7 @@ export function PortfolioEditor({
         lead={<h1 className={`shrink-0 ${barTitle}`}>Portfolio</h1>}
         right={
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            <CopyLink url={url} onCopied={() => setCopiedAt(Date.now())} />
+            <CopyLink url={url} href={href} onCopied={() => setCopiedAt(Date.now())} />
             {/* The sticky preview beside the form is for typing against. This
                 is for the last look before the link goes out: the whole page at
                 real device widths, on its own screen. It reads the saved row,
@@ -733,12 +738,22 @@ function CopiedToast({ show }: { show: boolean }) {
  * flips to a check while the toast above is up, so the button itself also
  * acknowledges the click.
  */
-function CopyLink({ url, onCopied }: { url: string; onCopied: () => void }) {
+function CopyLink({
+  url,
+  href,
+  onCopied,
+}: {
+  /** what is printed: host and slug, no scheme */
+  url: string;
+  /** where it goes, scheme included */
+  href: string;
+  onCopied: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(`https://${url}`);
+      await navigator.clipboard.writeText(href);
       setCopied(true);
       onCopied();
       setTimeout(() => setCopied(false), 3000);
@@ -751,7 +766,7 @@ function CopyLink({ url, onCopied }: { url: string; onCopied: () => void }) {
   return (
     <div className="flex min-w-0 items-center gap-0.5">
       <a
-        href={`https://${url}`}
+        href={href}
         target="_blank"
         rel="noreferrer"
         className="truncate text-[14px] font-semibold text-flame no-underline transition-colors hover:text-flame-dark sm:text-[15px]"
@@ -1852,7 +1867,7 @@ function PublishPanel({
         spec={PORTFOLIO_FIELDS.slug}
         value={slug}
         onChange={onSlug}
-        prefix={`${brand.domain}/`}
+        prefix={`${PORTFOLIO_DOMAIN}/`}
       />
       {problem && <ErrorLine>{problem}</ErrorLine>}
 

@@ -14,6 +14,8 @@
  * AI that returns a whole document can be validated and written in one shot.
  */
 
+import { absoluteUrl, SITE_URL } from "@/lib/site-url";
+
 /* ------------------------------------------------------------------ pieces */
 
 /** Where a creator can be reached. `website` is here so the row renders the
@@ -261,7 +263,8 @@ export function emptyPortfolio(seed?: {
 /**
  * Routes that already exist, plus the ones worth keeping free.
  *
- * The public portfolio lives at the root — `creatorempire.app/yourhandle` — because
+ * The public portfolio lives at the root — `<this deploy>/yourhandle`, see
+ * PORTFOLIO_DOMAIN below — because
  * that is the address people actually hand out. A static route always beats a
  * dynamic one in Next, so `/login` is safe either way, but a creator who claims
  * "login" would still get a page they can never reach, and one who claims "api"
@@ -303,10 +306,42 @@ export function slugProblem(slug: string): string | null {
   return null;
 }
 
-/** The public address. One place, so the header link, the copy button and the
- *  page's own canonical tag can never drift apart. */
-export function portfolioUrl(slug: string, domain = "creatorempire.app") {
+/**
+ * The public address. One place, so the header link, the copy button, the
+ * founder's people page and the page's own canonical tag can never drift apart.
+ *
+ * The host is READ rather than typed. It was typed once, as
+ * `creatorempire.app`, and went stale: that domain is not pointed at this
+ * project and resolves to nothing, while the deploy has been served from
+ * creatorempire.vercel.app the whole time. So every creator was handed an
+ * address that answers nothing, on the one screen whose entire job is to print
+ * an address somebody can open.
+ *
+ * SITE_URL is the same value `metadataBase` is built from in app/layout.tsx, so
+ * the address printed on a portfolio and the canonical tag on that portfolio
+ * now come from one place by construction rather than by two people
+ * remembering.
+ *
+ * NEXT_PUBLIC_SITE_URL is load bearing here: this module is imported by the
+ * editor, which is a client component, and the VERCEL_* fallbacks inside
+ * site-url only exist on the server. The env var is set on the deploy, so the
+ * browser is handed the real host rather than the localhost fallback.
+ */
+export const PORTFOLIO_DOMAIN = SITE_URL.replace(/^https?:\/\//, "");
+
+export function portfolioUrl(slug: string, domain = PORTFOLIO_DOMAIN) {
   return `${domain}/${slug || "yourhandle"}`;
+}
+
+/**
+ * The same address with a scheme on it, for an href or the clipboard.
+ *
+ * Callers used to write `https://${portfolioUrl(slug)}` by hand, which is a
+ * second place the address gets assembled and is wrong in development, where
+ * the origin is http and on a port.
+ */
+export function portfolioHref(slug: string) {
+  return absoluteUrl(`/${slug || "yourhandle"}`);
 }
 
 /* -------------------------------------------------------------- validation */
