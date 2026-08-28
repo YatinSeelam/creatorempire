@@ -1,3 +1,20 @@
+2026-08-28b — the other half of the env fix
+
+the first pass swapped NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY onto
+qtcwdvaoxrfojzaktwyg and left four values behind, all of them the dead
+project's: the PUBLISHABLE key plus the scrapecreators, upload-post and apify
+keys. the publishable key is the one the browser sends, so /auth/v1/settings
+answered "Invalid API key" and the login page rendered it in its error slot.
+the service-key paths kept working, which is why the cron looked healthy while
+nobody could sign in.
+
+the rule this cost: when a .env moves between projects, every key in it moves,
+not the two that are obviously project-scoped. .env is now diffed key by key
+against .env.local.retired-2026-08-28 and disagrees on nothing. verified
+/auth/v1/settings 200 on the publishable key, /login 200, and a forced sync of
+24 videos in 4 api calls on the restored scrapecreators key.
+
+
 2026-08-28 — its own repo, editing behind a soon page, and a refresh that
 outlives the tab
 
