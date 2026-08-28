@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { Picker } from "@/components/dash/form";
 import { EmptyMoneyArt } from "@/components/editors/empty-art";
 import { money } from "@/lib/money";
 
@@ -139,19 +140,16 @@ export function PayoutHistory({ rows }: { rows: PayoutRow[] }) {
             <label className="relative mb-3 shrink-0">
               <span className="sr-only">filter by month</span>
               <Calendar className="pointer-events-none absolute left-3.5 top-1/2 size-[17px] -translate-y-1/2 text-ink-50" />
-              <select
+              <Picker
                 value={month}
-                onChange={(e) => setMonth(e.target.value)}
-                className="h-11 cursor-pointer appearance-none rounded-[10px] border border-line bg-paper pl-10 pr-9 text-[14px] font-semibold outline-none transition-colors focus:border-flame"
-              >
-                <option value="all">every month</option>
-                {months.map(([key, label]) => (
-                  <option key={key} value={key}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <Chevron className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-ink-50" />
+                onChange={setMonth}
+                ariaLabel="filter by month"
+                options={[
+                  { value: "all", label: "every month" },
+                  ...months.map(([key, label]) => ({ value: key, label })),
+                ]}
+                triggerClass="flex h-11 w-full cursor-pointer items-center justify-between gap-2 rounded-[10px] border border-line bg-paper pl-10 pr-3 text-[14px] font-semibold outline-none transition-colors focus:border-ink"
+              />
             </label>
           )}
         </div>
@@ -265,17 +263,3 @@ function Calendar({ className = "" }: { className?: string }) {
   );
 }
 
-function Chevron({ className = "" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
-      <path
-        d="m7 10 5 5 5-5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}

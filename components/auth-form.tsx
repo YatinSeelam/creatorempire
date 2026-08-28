@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { safeNext } from "@/lib/safe-next";
 import { createClient } from "@/lib/supabase/client";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * The one door: google.
@@ -32,7 +33,11 @@ export function AuthForm({
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(dest)}`,
+        // SITE_URL, never window.location.origin. in production this app is
+        // served through a rewrite at www.ugcflows.com/creatorempire, so the
+        // origin alone drops the prefix and supabase refuses a url that is not
+        // on the allow list. SITE_URL already carries the path.
+        redirectTo: `${SITE_URL}/auth/callback?next=${encodeURIComponent(dest)}`,
         queryParams: { prompt: "select_account" },
       },
     });

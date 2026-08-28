@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Field, Submit } from "@/components/dash/form";
+import { PlatformGlyph } from "@/components/dash/platform-glyph";
 import { PersonAvatar, Thumb } from "@/components/dash/thumb";
 import { Panel, Pill, Row } from "@/components/dash/ui";
+import { AccessPicker } from "@/components/dash/access-picker";
 import { ViewAsButton } from "@/components/dash/view-as";
+import { accessOf } from "@/lib/access-levels";
 import {
   loadPerson,
   personInitial,
@@ -17,12 +20,12 @@ import {
   JOB_STATUS_LABEL,
   type JobStatus,
 } from "@/lib/editing";
+import { PLATFORMS, type Platform } from "@/lib/deals";
 import { ago, money, shortDate, views as compactViews } from "@/lib/money";
-import { ROLE_LABEL, TENANT_ROOT, type OrgRole } from "@/lib/org";
+import { ROLE_LABEL, type OrgRole } from "@/lib/org";
 import { portfolioUrl } from "@/lib/portfolio-schema";
 import { requireFounderView } from "@/lib/supabase/founder";
 import { microsToUsd } from "@/lib/usage-pricing";
-import { createOrgFor } from "../../actions";
 
 export const metadata: Metadata = {
   title: "Person · Creator Empire",
@@ -46,25 +49,26 @@ const FEE_KIND_LABEL: Record<string, string> = {
   per_month: "a month",
 };
 
-/** Platform strings come from three tables and are not a closed set here. */
-function platformLabel(raw: string): string {
-  if (!raw) return "unknown";
-  return raw
-    .split(",")
-    .map((p) => {
-      const k = p.trim().toLowerCase();
-      if (k === "tiktok") return "TikTok";
-      if (k === "instagram") return "Instagram";
-      if (k === "youtube") return "YouTube";
-      return k ? k[0].toUpperCase() + k.slice(1) : "";
-    })
-    .filter(Boolean)
-    .join(", ");
+/**
+ * Platform strings reach this page from three tables and are not a closed set,
+ * so they are narrowed before anything tries to draw a mark for one. Anything
+ * unrecognised keeps its own word rather than being drawn as the wrong logo.
+ */
+function asPlatform(raw: string): Platform | null {
+  const k = (raw ?? "").trim().toLowerCase();
+  return (PLATFORMS as readonly string[]).includes(k) ? (k as Platform) : null;
 }
 
-/** "3 tiktok, 2 instagram" out of the per-platform counts. */
-function platformCounts(byPlatform: [string, number][]): string {
-  return byPlatform.map(([p, n]) => `${fmt(n)} ${p}`).join(", ");
+/**
+ * The mark, or the word when we do not have a mark for it.
+ *
+ * Spelling "TikTok" beside every handle costs a line of type to say what a
+ * 15px logo says instantly, and this page had four of them on one row.
+ */
+function PlatformIcon({ raw, className = "size-[15px]" }: { raw: string; className?: string }) {
+  const platform = asPlatform(raw);
+  if (!platform) return <span className="text-[12px] text-ink-50">{raw || "?"}</span>;
+  return <PlatformGlyph platform={platform} tone="brand" className={className} />;
 }
 
 export default async function AdminPersonPage({
@@ -86,29 +90,24 @@ export default async function AdminPersonPage({
   const name = personName(person);
   const dealAccountCount = deals.reduce((n, d) => n + d.accounts.length, 0);
 
-  // the workspaces they own or sit on. read under the admin view, which the
-  // `orgs_admin_read` / `org_members_admin_read` policies answer to; nothing
-  // else in the app can see somebody else's seats.
+  // the seat they hold, read under the admin view, which the
+  // `org_members_admin_read` policy answers to; nothing else in the app can see
+  // somebody else's seats.
+  //
+  // one role, not a list of workspaces. this used to be a whole panel naming
+  // every org they sat on with an address under each and a form to mint them
+  // another. there is one workspace on this deploy, the addresses it printed
+  // were hosts nothing answers on, and a second org buys its owner nothing
+  // because the app is pinned to CE_ORG_ID. a word in the header says all of
+  // it that was ever true.
   const { supabase } = await requireFounderView("/founder");
   const { data: seatRows } = await supabase
     .from("org_members")
-    .select("role, org:orgs(id, name, slug, owner_id)")
+    .select("role")
     .eq("user_id", id)
-    .order("joined_at", { ascending: true });
-  const seats = (seatRows ?? [])
-    .map((r) => {
-      const row = r as unknown as {
-        role: OrgRole;
-        org: {
-          id: string;
-          name: string;
-          slug: string;
-          owner_id: string;
-        } | null;
-      };
-      return row.org ? { role: row.role, ...row.org } : null;
-    })
-    .filter((s): s is NonNullable<typeof s> => s !== null);
+    .order("joined_at", { ascending: true })
+    .limit(1);
+  const seat = (seatRows?.[0]?.role ?? null) as OrgRole | null;
 
   return (
     <div className="space-y-6">
@@ -139,7 +138,7 @@ export default async function AdminPersonPage({
               <h2 className="text-[20px] font-extrabold tracking-[-0.025em]">
                 {name}
               </h2>
-              {person.is_admin && <Pill tone="flame">Founder</Pill>}
+              {seat && <Pill tone="quiet">{ROLE_LABEL[seat]}</Pill>}
               {EDITING_ENABLED && detail.editorHandle && (
                 <Pill tone="ink">Editor</Pill>
               )}
@@ -185,140 +184,64 @@ export default async function AdminPersonPage({
             </div>
           </div>
 
-          <div className="shrink-0">
+          {/* what they can reach, and going and looking at it: the same job,
+              so the picker and the swap sit together rather than the first one
+              living on a tab of its own. */}
+          <div className="flex shrink-0 items-center gap-2.5">
+            <AccessPicker
+              userId={person.user_id}
+              email={person.email ?? ""}
+              level={accessOf(person)}
+            />
             <ViewAsButton userId={person.user_id} name={name} />
           </div>
         </div>
       </Panel>
 
-      {/* 1b. agency workspaces: what they run or sit on, and the one door an
-          agency owner has into the product. an owner never pays a creator
-          plan and cannot reach /new until they hold a seat, so a b2b customer
-          who signed up was stuck on the pricing page until this existed. */}
-      <Panel
-        title="Workspaces"
-        sub={
-          seats.length === 0
-            ? "not on any agency workspace"
-            : `${seats.length} ${seats.length === 1 ? "workspace" : "workspaces"}`
-        }
-        padded={false}
-      >
-        {seats.map((s) => (
-          <Row key={s.id}>
-            <Link href={`/founder/agencies/${s.id}`} className="min-w-0 flex-1 transition-colors hover:text-flame">
-              <p className="truncate text-[15px] font-semibold tracking-[-0.01em]">
-                {s.name}
-              </p>
-              <p className="mt-0.5 truncate text-[12.5px] text-ink-50">
-                {s.slug}.{TENANT_ROOT}
-              </p>
-            </Link>
-            <Pill tone={s.owner_id === person.user_id ? "flame" : "quiet"}>
-              {ROLE_LABEL[s.role]}
-            </Pill>
-          </Row>
-        ))}
-
-        <div className="border-t border-line px-5 py-5 first:border-t-0 sm:px-6">
-          <p className="text-[13.5px] font-semibold">
-            Give {name} an agency workspace
-          </p>
-          <p className="mt-1 max-w-[64ch] text-[12.5px] leading-[1.55] text-ink-50">
-            They own it outright: branding, invites, the roster, their own flow
-            key. Nobody&apos;s deals move. They see it in their switcher on the
-            next page load and can open /agency straight away, no plan needed.
-          </p>
-          <form
-            action={createOrgFor}
-            className="mt-3 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end"
-          >
-            <input type="hidden" name="user_id" value={person.user_id} />
-            <Field
-              label="Workspace name"
-              name="name"
-              placeholder="Acme Creators"
-              required
-            />
-            <Field
-              label="Web address"
-              name="slug"
-              placeholder="acme"
-              suffix={`.${TENANT_ROOT}`}
-              hint="Blank takes it from the name."
-            />
-            <div className="flex">
-              <Submit>Create for them</Submit>
-            </div>
-          </form>
-        </div>
-      </Panel>
-
-      {/* 2. usage, one panel, four groups */}
+      {/* 2. usage, one panel, four numbers */}
       <Panel
         title="Usage"
-        sub={`${microsToUsd(person.spend_micros)} across the whole product, priced by the rates in code`}
         action={
-          <Link
-            href={`/founder/usage?user=${person.user_id}&range=all`}
-            className="text-[13px] font-semibold text-ink-50 transition-colors hover:text-flame-dark"
-          >
-            Full ledger
-          </Link>
+          <span className="text-[13px] font-semibold text-ink-50">
+            {microsToUsd(person.spend_micros)} all in
+          </span>
         }
       >
+        {/* one line under each number, not three. the three said credits AND
+            calls AND saved profiles, which is the ledger's job; what this panel
+            is for is "is this person expensive", and that is the number. */}
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <UsageGroup
             label="Scraper"
             value={microsToUsd(usage.scrape.micros)}
-            lines={
+            hint={
               usage.scrape.calls === 0
-                ? ["never run"]
-                : [
-                    `${fmt(usage.scrape.credits)} credits burned`,
-                    `${fmt(usage.scrape.calls)} ${usage.scrape.calls === 1 ? "call" : "calls"}`,
-                    `${fmt(usage.scrape.profiles)} saved ${usage.scrape.profiles === 1 ? "profile" : "profiles"}`,
-                  ]
+                ? "never run"
+                : `${fmt(usage.scrape.credits)} credits`
             }
           />
           <UsageGroup
             label="AI flow"
             value={microsToUsd(usage.flow.micros)}
-            lines={
+            hint={
               usage.flow.turns === 0
-                ? ["never used"]
-                : [
-                    `${fmt(usage.flow.turns)} ${usage.flow.turns === 1 ? "turn" : "turns"}`,
-                    `${fmt(usage.flow.tokensIn)} tokens in`,
-                    `${fmt(usage.flow.tokensOut)} tokens out`,
-                  ]
+                ? "never used"
+                : `${fmt(usage.flow.turns)} ${usage.flow.turns === 1 ? "turn" : "turns"}`
             }
           />
           <UsageGroup
             label="Account emails"
             value={fmt(usage.emails.addresses)}
-            lines={
+            hint={
               usage.emails.addresses === 0
-                ? ["no addresses made"]
-                : [
-                    `${usage.emails.addresses === 1 ? "address" : "addresses"} made`,
-                    usage.emails.accounts === 0
-                      ? "no platform accounts yet"
-                      : platformCounts(usage.emails.byPlatform),
-                    `${fmt(usage.emails.codes)} ${usage.emails.codes === 1 ? "code" : "codes"} received`,
-                  ]
+                ? "none made"
+                : `${fmt(usage.emails.codes)} ${usage.emails.codes === 1 ? "code" : "codes"}`
             }
           />
           <UsageGroup
             label="Transcriber"
             value={fmt(usage.transcripts)}
-            lines={
-              usage.transcripts === 0
-                ? ["never used"]
-                : [
-                    `${usage.transcripts === 1 ? "transcript" : "transcripts"} saved`,
-                  ]
-            }
+            hint={usage.transcripts === 0 ? "never used" : "saved"}
           />
         </div>
       </Panel>
@@ -330,15 +253,12 @@ export default async function AdminPersonPage({
         action={
           <span className="text-[13px] text-ink-50">
             {fmt(dealAccountCount)}{" "}
-            {dealAccountCount === 1 ? "account" : "accounts"} attached
+            {dealAccountCount === 1 ? "account" : "accounts"}
           </span>
         }
       >
         {deals.length === 0 ? (
-          <Empty
-            head="No deals."
-            body="A deal is one brand and one run of work. Without one there is nothing for a bonus rule to pay against."
-          />
+          <Empty>No deals yet.</Empty>
         ) : (
           deals.map((d) => (
             <Row key={d.id}>
@@ -356,16 +276,26 @@ export default async function AdminPersonPage({
                   {d.started_on ? ` · from ${shortDate(d.started_on)}` : ""}
                   {d.ends_on ? ` to ${shortDate(d.ends_on)}` : ""}
                 </p>
-                <p className="mt-1 truncate text-[13px] text-ink-50">
-                  {d.accounts.length === 0
-                    ? "no accounts attached"
-                    : d.accounts
-                        .map(
-                          (a) =>
-                            `${platformLabel(a.platform)} @${a.handle}${a.active ? "" : " (paused)"}`
-                        )
-                        .join(" · ")}
-                </p>
+                {/* paused is drawn rather than spelled: a dimmed row of marks
+                    says which account is off without " (paused)" after each. */}
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  {d.accounts.length === 0 ? (
+                    <span className="text-[13px] text-ink-50">no accounts</span>
+                  ) : (
+                    d.accounts.map((a) => (
+                      <span
+                        key={`${a.platform}-${a.handle}`}
+                        title={a.active ? undefined : "paused"}
+                        className={`inline-flex items-center gap-1.5 text-[13px] ${
+                          a.active ? "text-ink-70" : "opacity-40"
+                        }`}
+                      >
+                        <PlatformIcon raw={a.platform} />
+                        <span className="truncate">@{a.handle}</span>
+                      </span>
+                    ))
+                  )}
+                </div>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-[15px] font-bold tabular-nums">
@@ -423,10 +353,7 @@ export default async function AdminPersonPage({
         }
       >
         {ugc.length === 0 ? (
-          <Empty
-            head="Nothing here yet."
-            body="This fills from three places: videos on a deal, posts pulled with the profile scraper, and anything sent out through the autoposter. Empty means none of the three has run for this account."
-          />
+          <Empty>Nothing posted, scraped or tracked yet.</Empty>
         ) : (
           <div className="grid gap-3 px-5 py-5 sm:grid-cols-2 sm:px-6 lg:grid-cols-3">
             {ugc.map((item) => (
@@ -439,18 +366,15 @@ export default async function AdminPersonPage({
   );
 }
 
-/**
- * One of the four usage groups: what the tool is called, what it cost or made,
- * and the two or three lines that say how.
- */
+/** One of the four usage numbers: the tool, what it cost, one line of how. */
 function UsageGroup({
   label,
   value,
-  lines,
+  hint,
 }: {
   label: string;
   value: string;
-  lines: string[];
+  hint: string;
 }) {
   return (
     <div className="rounded-[12px] border border-line bg-shell px-4 py-4">
@@ -458,21 +382,16 @@ function UsageGroup({
       <p className="mt-1.5 text-[22px] font-extrabold leading-none tracking-[-0.02em] tabular-nums">
         {value}
       </p>
-      <div className="mt-2 space-y-1">
-        {lines.map((l) => (
-          <p key={l} className="text-[12.5px] leading-[1.45] text-ink-50">
-            {l}
-          </p>
-        ))}
-      </div>
+      <p className="mt-2 text-[12.5px] text-ink-50">{hint}</p>
     </div>
   );
 }
 
 /**
  * One post. The cover is the point, so it is the whole top of the card, and the
- * source chip sits on it because a scraped post and a deal video are otherwise
- * the same picture with the same number under it.
+ * two chips ride on it rather than adding lines under it: where the post came
+ * from on the left, whose platform it is on the right, as its own mark. Under
+ * the cover is the title and the one number anybody reads a post for.
  */
 function UgcCard({ item }: { item: UgcItem }) {
   const body = (
@@ -480,11 +399,14 @@ function UgcCard({ item }: { item: UgcItem }) {
       <span className="relative block">
         <Thumb
           src={item.thumbnail}
-          fallback={platformLabel(item.platform).slice(0, 2)}
+          fallback={(item.platform || "?").slice(0, 1).toUpperCase()}
           className="block h-[168px] w-full rounded-[10px]"
         />
         <span className="absolute left-2 top-2 inline-flex items-center rounded-pill bg-ink/85 px-2.5 py-1 text-[11.5px] font-semibold text-white">
           {SOURCE_LABEL[item.source]}
+        </span>
+        <span className="absolute right-2 top-2 inline-flex items-center rounded-pill bg-paper/90 p-1.5">
+          <PlatformIcon raw={item.platform} className="size-[14px]" />
         </span>
       </span>
 
@@ -493,11 +415,8 @@ function UgcCard({ item }: { item: UgcItem }) {
       </span>
 
       <span className="mt-1 block truncate text-[12.5px] text-ink-50">
-        {platformLabel(item.platform)}
-        {item.views !== null ? ` · ${compactViews(item.views)} views` : ""}
-        {item.likes ? ` · ${compactViews(item.likes)} likes` : ""}
+        {item.views !== null ? `${compactViews(item.views)} views` : "no views yet"}
         {item.postedAt ? ` · ${ago(item.postedAt)}` : ""}
-        {item.note ? ` · ${item.note}` : ""}
       </span>
     </>
   );
@@ -519,13 +438,8 @@ function UgcCard({ item }: { item: UgcItem }) {
   );
 }
 
-function Empty({ head, body }: { head: string; body: string }) {
+function Empty({ children }: { children: ReactNode }) {
   return (
-    <div className="px-5 py-10 text-center">
-      <p className="text-[15px] font-bold tracking-[-0.015em]">{head}</p>
-      <p className="mx-auto mt-1 max-w-[52ch] text-[13.5px] leading-[1.6] text-ink-50">
-        {body}
-      </p>
-    </div>
+    <p className="px-5 py-10 text-center text-[13.5px] text-ink-50">{children}</p>
   );
 }

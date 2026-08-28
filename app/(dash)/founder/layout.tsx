@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { FounderTabs } from "@/components/dash/founder-tabs";
 import { DashBar, Page, barTitle } from "@/components/dash/ui";
 import { requireFounder } from "@/lib/supabase/founder";
 
@@ -29,15 +28,14 @@ export default async function AdminLayout({ children }: { children: ReactNode })
         lead={<h1 className={barTitle}>Founder</h1>}
         right={
           <span className="hidden text-[13px] text-ink-50 sm:block">
-            everyone on creator empire, every workspace, what it all costs
+            everyone here, and what it all costs
           </span>
         }
       />
 
-      <Page className="space-y-6">
-        <FounderTabs />
-        {children}
-      </Page>
+      {/* no tab row. it had two entries, then one, and a nav that names the
+          page you are already on is furniture. */}
+      <Page className="space-y-6">{children}</Page>
     </>
   );
 }

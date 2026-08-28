@@ -26,6 +26,7 @@ import {
 import { MAX_CAPTION } from "@/lib/autopost/limits";
 import { PLATFORMS, PLATFORM_LABEL, type Platform } from "@/lib/deals";
 import { PLATFORM_COLOR } from "@/lib/autopost/plan";
+import { Picker } from "@/components/dash/form";
 import { ClipThumb } from "@/components/dash/clip-thumb";
 import { BrandMark } from "@/components/dash/brand-mark";
 import { PlatformGlyph } from "@/components/dash/platform-glyph";
@@ -1101,7 +1102,8 @@ export function AutopostBatchFlow({
               <div>
                 <h2 className="text-[13.5px] font-bold tracking-[-0.01em]">timing</h2>
                 <p className="text-[11.5px] text-ink-50">
-                  changing any of these redraws every row and drops hand edits
+                  changing any of these redraws every row and drops hand edits.
+                  a time at or just past now goes out immediately
                 </p>
               </div>
             </div>
@@ -1120,6 +1122,25 @@ export function AutopostBatchFlow({
                   onChange={(v) => setSpread({ startMin: v })}
                 />
               </Field>
+
+              {/* a minute out, which the server reads as now and publishes
+                  immediately rather than handing to upstream's scheduler. the
+                  seconds are dropped so the row says the minute it means. */}
+              <button
+                type="button"
+                onClick={() => {
+                  const at = new Date();
+                  at.setSeconds(0, 0);
+                  at.setMinutes(at.getMinutes() + 1);
+                  setSpread({
+                    start: dayKey(at),
+                    startMin: at.getHours() * 60 + at.getMinutes(),
+                  });
+                }}
+                className="h-[38px] shrink-0 rounded-md border border-line px-3.5 text-[13px] font-semibold transition-colors hover:border-ink"
+              >
+                now
+              </button>
 
               {picked.length > 1 && (
                 <>
@@ -1500,17 +1521,13 @@ function Choose({
   onChange: (next: string) => void;
 }) {
   return (
-    <select
+    <Picker
       value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="cursor-pointer rounded-md border border-line bg-paper px-3 py-1.5 text-[12.5px] font-bold outline-none focus:border-ink"
-    >
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
+      onChange={onChange}
+      options={options.map((o) => ({ value: o, label: o }))}
+      triggerClass="flex cursor-pointer items-center gap-2 rounded-md border border-line bg-paper px-3 py-1.5 text-[12.5px] font-bold outline-none focus:border-ink"
+      chevronClass="size-3.5"
+    />
   );
 }
 

@@ -15,7 +15,7 @@ import {
 } from "@/app/(dash)/deals/actions";
 import { BrandMark } from "@/components/dash/brand-mark";
 import { BrandPicker, type PickerBrand } from "@/components/dash/brand-picker";
-import { Area, CheckRow, Field, Label, Note, Select, Submit } from "@/components/dash/form";
+import { Area, CheckRow, Field, Label, Note, Picker, Select, Submit } from "@/components/dash/form";
 import { PlatformGlyph } from "@/components/dash/platform-glyph";
 import {
   CURATED_BRANDS,
@@ -290,9 +290,11 @@ function AccountFields() {
             key={platform}
             className="flex items-center rounded-xl border border-line bg-shell px-3.5 focus-within:border-flame"
           >
-            <span className="flex w-[112px] shrink-0 items-center gap-2 text-[13px] font-semibold text-ink-70">
-              <PlatformGlyph platform={platform} className="size-[15px] text-ink-50" />
-              {PLATFORM_LABEL[platform]}
+            {/* the mark on its own. the word beside it was 112px of column
+                saying what the logo already says, and the placeholder in the
+                field next to it names the platform again anyway. */}
+            <span className="flex shrink-0 items-center pr-3 text-ink-50" title={PLATFORM_LABEL[platform]}>
+              <PlatformGlyph platform={platform} className="size-[17px]" />
             </span>
             {/* no "@" glyph in front: half of these arrive as a pasted profile
                 url, and a url sitting behind an @ reads as a mistake. */}
@@ -1348,18 +1350,13 @@ export function RuleFields({
         <div>
           <Label>How long it counts for</Label>
           <div className="mt-1.5 flex items-center rounded-xl border border-line bg-shell px-3.5 focus-within:border-flame">
-            <select
+            <Picker
               name={`${prefix}window_kind`}
               value={windowKind}
-              onChange={(e) => setWindowKind(e.target.value as WindowKind)}
-              className="w-full cursor-pointer bg-transparent py-2.5 text-[14.5px] font-medium focus:outline-none"
-            >
-              {WINDOW_KIND.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setWindowKind(v as WindowKind)}
+              ariaLabel="How long it counts for"
+              options={WINDOW_KIND}
+            />
           </div>
           <p className="mt-1 text-[12.5px] text-ink-50">
             {windowKind === "forever"
@@ -1594,18 +1591,13 @@ export function ManualStatsForm({
       <div className="min-w-[220px] flex-1">
         <Label>Post</Label>
         <div className="mt-1.5 flex items-center rounded-xl border border-line bg-shell px-3.5 focus-within:border-flame">
-          <select
+          <Picker
             name="video_id"
             value={videoId}
-            onChange={(e) => setVideoId(e.target.value)}
-            className="w-full cursor-pointer bg-transparent py-2.5 text-[14.5px] font-medium focus:outline-none"
-          >
-            {videos.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.label}
-              </option>
-            ))}
-          </select>
+            onChange={setVideoId}
+            ariaLabel="Post"
+            options={videos.map((v) => ({ value: v.id, label: v.label }))}
+          />
         </div>
       </div>
 

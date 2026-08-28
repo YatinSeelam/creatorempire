@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { slugProblem, TENANT_ROOT, toSlug } from "@/lib/org";
+import type { AccessLevel } from "@/lib/access-levels";
+import { CE_ORG_ID } from "@/lib/org";
 import { requireFounder } from "@/lib/supabase/founder";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -106,70 +107,140 @@ export async function startViewAs(formData: FormData) {
   redirect("/dashboard");
 }
 
+
 /**
- * Mint an agency workspace for somebody else, owned by them.
+ * What somebody is allowed to do here, set from the one list that shows them.
  *
- * This is how a b2b customer gets in. The (dash) gate opens for an admin, a
- * paid subscription or a seat on an org, and an agency owner arriving from the
- * mentorships page is none of those: they never pay a creator plan, and the
- * only place a workspace could be made (/new) sits behind the gate they cannot
- * pass. So they signed up, landed on the pricing page, and stopped. Even "view
- * as" could not rescue them, because it lands on the same page.
+ * There used to be an Access tab: its own page, its own list of email
+ * addresses, and no way to tell which of them was the person you were looking
+ * at on People. Two lists of the same human beings is one list too many, so
+ * the control moved onto the row.
  *
- * The service client is what makes this possible: `orgs_insert_own` insists
- * `owner_id = auth.uid()`, and the whole point here is that it is not. The
- * insert trigger (`seat_org_owner`) writes their owner seat, which is the row
- * that opens the gate for them the next time they load a page. Nothing else
- * changes hands. They still cannot see any creator's deals until that creator
- * accepts an invite; membership is a lens, not ownership.
+ * Three states, and each one writes exactly the rows `lib/access.ts`
+ * `isEntitled` reads. Nothing else is touched:
  *
- * Requires an existing account: the row needs a real `owner_id`, and a
- * profile row is what tells us there is one. Sign up first, then this.
+ *   founder    a row on `admin_emails` with role 'founder'. Their seat, if
+ *              they hold one, is left alone: the platform role and a seat on
+ *              the workspace are different facts and a founder is usually both.
+ *   student    no grant, and a seat on the workspace with role 'creator'.
+ *   no access  neither. They keep their account and everything in it; they
+ *              land on /account the next time they load a page.
+ *
+ * The grant is written with the caller's own session, so the database's guards
+ * are the check: you cannot change your own row, and the last founder cannot be
+ * demoted or deleted. The SEAT needs the service key, because sessions are
+ * granted select/delete/update(role) on `org_members` and never insert — the
+ * only other way in is `accept_org_invite`, which needs a token somebody was
+ * sent. An owner seat is never written by this at all: the workspace owner is
+ * pinned by trigger and removing them would leave the programme ownerless.
  */
-export async function createOrgFor(formData: FormData) {
-  await requireFounder("/founder");
+export type AccessState = { error?: string; ok?: string };
+
+const LEVELS: readonly AccessLevel[] = ["none", "student", "founder"];
+
+export async function setAccess(formData: FormData): Promise<AccessState> {
+  const { user } = await requireFounder("/founder");
 
   const userId = String(formData.get("user_id") ?? "").trim();
-  const name = String(formData.get("name") ?? "").trim();
-  const slug = toSlug(String(formData.get("slug") ?? "").trim() || name);
-  const to = `/founder/people/${userId}`;
-  const back = (note: string): never =>
-    redirect(`${to}?note=${encodeURIComponent(note)}`);
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const raw = String(formData.get("level") ?? "");
+  const level = (LEVELS as readonly string[]).includes(raw)
+    ? (raw as AccessLevel)
+    : null;
 
-  if (!userId) redirect("/founder");
-  if (!name) back("give the workspace a name.");
-  const problem = slugProblem(slug);
-  if (problem) back(problem.toLowerCase());
+  if (!level) return { error: "pick an access level." };
+  if (!email) return { error: "no email on that account, so there is nothing to set." };
+  // the database refuses this for the grant half and says so; the seat half has
+  // no such guard, and a founder removing their own seat mid-click is the one
+  // way to lock yourself out of the programme side.
+  if (email === (user.email ?? "").toLowerCase())
+    return { error: "you cannot change your own access." };
+  // a seat needs somebody to seat. an address with no account can be put on the
+  // founder list (it waits for them) but cannot hold one.
+  if (!userId && level === "student")
+    return {
+      error: "they have to sign in once first. invite them from invites & roles.",
+    };
 
-  const service = createServiceClient();
-  if (!service)
-    return back(
-      "SUPABASE_SECRET_KEY is not set, so nothing can be made for them."
-    );
+  const supabase = await createClient();
 
-  const { data: profile } = await service
-    .from("profiles")
-    .select("id")
-    .eq("id", userId)
-    .maybeSingle();
-  if (!profile) back("no account behind that id. they need to sign up first.");
-
-  const { error } = await service
-    .from("orgs")
-    .insert({ name, slug, owner_id: userId });
-
-  if (error) {
-    back(
-      error.code === "23505"
-        ? `${slug}.${TENANT_ROOT} is taken. try another address.`
-        : error.message
-    );
+  // 1. the grant. founder is the only one worth writing: the 'creator' grant
+  //    opens nothing on this deploy (a seat does), so it is never handed out.
+  if (level === "founder") {
+    const { error } = await supabase
+      .from("admin_emails")
+      .upsert({ email, role: "founder", added_by: user.id }, { onConflict: "email" });
+    if (error) return { error: error.message };
+  } else {
+    const { error } = await supabase.from("admin_emails").delete().eq("email", email);
+    if (error) return { error: error.message };
   }
 
-  revalidatePath(to);
-  back(
-    `${name} is theirs. it shows up in their switcher the next time they load a page.`
-  );
+  // 2. the seat. nothing to do for an address nobody has signed up on yet.
+  if (userId) {
+    const seatError = await setSeat(userId, level);
+    if (seatError) return { error: seatError };
+  }
+
+  revalidatePath("/founder");
+  if (userId) revalidatePath(`/founder/people/${userId}`);
+  return {
+    ok:
+      level === "none"
+        ? `${email} is out.`
+        : `${email} is a ${level}.`,
+  };
+}
+
+/**
+ * Give or take the workspace seat, on the service client.
+ *
+ * Returns a message rather than throwing, because every caller of this is a
+ * picker that has to put itself back where it was and say why.
+ */
+async function setSeat(userId: string, level: AccessLevel): Promise<string | null> {
+  const service = createServiceClient();
+  if (!service) return "SUPABASE_SECRET_KEY is not set, so seats cannot be changed.";
+
+  const { data: seat } = await service
+    .from("org_members")
+    .select("role")
+    .eq("org_id", CE_ORG_ID)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  // the owner is the workspace. never demoted, never removed, not from here.
+  if (seat?.role === "owner") return null;
+
+  if (level === "student") {
+    if (!seat) {
+      const { error } = await service
+        .from("org_members")
+        .insert({ org_id: CE_ORG_ID, user_id: userId, role: "creator" });
+      return error ? error.message : null;
+    }
+    if (seat.role !== "creator") {
+      const { error } = await service
+        .from("org_members")
+        .update({ role: "creator" })
+        .eq("org_id", CE_ORG_ID)
+        .eq("user_id", userId);
+      return error ? error.message : null;
+    }
+    return null;
+  }
+
+  if (level === "none" && seat) {
+    const { error } = await service
+      .from("org_members")
+      .delete()
+      .eq("org_id", CE_ORG_ID)
+      .eq("user_id", userId);
+    return error ? error.message : null;
+  }
+
+  // founder: the seat is theirs to keep, whatever it is.
+  return null;
 }
 
 /**

@@ -1,9 +1,17 @@
 import type { NextConfig } from "next";
+import { BASE_PATH } from "./lib/base-path";
 
 const nextConfig: NextConfig = {
   // this repo sits inside a bigger folder, so pin the root or turbopack walks up
   // and picks the wrong lockfile
   turbopack: { root: __dirname },
+
+  // production serves this app at www.ugcflows.com/creatorempire, behind a
+  // rewrite on the ugc flows deploy. BASE_PATH is the path half of
+  // NEXT_PUBLIC_SITE_URL, so the same build script produces the prefixed app in
+  // vercel and the bare one on localhost. assetPrefix is left alone on purpose:
+  // next already sets it to basePath when it is empty.
+  basePath: BASE_PATH,
 
   // @napi-rs/canvas ships a native .node binding and ffmpeg-static ships a
   // binary. Bundling either means the compiler parsing a binary and failing the

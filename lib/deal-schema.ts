@@ -255,7 +255,7 @@ export const DEAL_FIELDS = {
   },
   cycle_anchor_on: {
     label: "Cycle starts",
-    hint: "First day of one pay period. A 16th to 15th deal stores the 16th. Empty means calendar months.",
+    hint: "First day of one pay period. Empty means calendar months.",
     kind: "date",
     example: "2026-08-16",
     ai: "The first day of any one pay period, as a YYYY-MM-DD day key. Sets where monthly cycles break (the 16th means 16th to 15th) and which week a weekly or biweekly cycle starts. Null means calendar months.",
@@ -335,7 +335,7 @@ export const RULE_FIELDS = {
   },
   view_counting: {
     label: "View counting",
-    hint: "For one cut posted to several platforms. Videos are tied together by their content group tag.",
+    hint: "For one cut posted to several platforms.",
     kind: "enum",
     options: VIEW_COUNTING,
     example: "combined",

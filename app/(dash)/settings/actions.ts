@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { KEY_PROVIDERS, type KeyProvider } from "@/lib/api-keys";
 import { getBilling } from "@/lib/billing";
 import { normalizePhone } from "@/lib/notify";
+import { CE_ORG_ID } from "@/lib/org";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
@@ -287,4 +289,62 @@ export async function toggleNavSection(formData: FormData): Promise<void> {
 
   // the rail is rendered by the layout, so the layout is what has to be redrawn.
   revalidatePath("/", "layout");
+}
+
+/**
+ * Save one workspace api key.
+ *
+ * The secret goes straight into `set_api_credential`, which puts it in vault
+ * and keeps only a four character hint on the row. Nothing here writes a table
+ * and nothing here can read a key back: the read is granted to `service_role`
+ * alone, so even this action, running as the signed-in owner, could not show
+ * somebody the key they just saved.
+ */
+export async function saveApiKey(
+  _prev: SettingsState,
+  formData: FormData
+): Promise<SettingsState> {
+  const provider = String(formData.get("provider") ?? "");
+  const secret = String(formData.get("secret") ?? "").trim();
+
+  if (!KEY_PROVIDERS.includes(provider as KeyProvider)) {
+    return { error: "Unknown provider." };
+  }
+  // an empty save is a slipped keystroke, not an instruction to unset a
+  // working key. clearing has its own button.
+  if (!secret) return { error: "Paste the key first." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_api_credential", {
+    p_provider: provider,
+    p_secret: secret,
+    p_org: CE_ORG_ID,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/settings");
+  return { ok: "Saved." };
+}
+
+/** Drop a key, ciphertext and all. The deploy's own env takes over again. */
+export async function clearApiKey(
+  _prev: SettingsState,
+  formData: FormData
+): Promise<SettingsState> {
+  const provider = String(formData.get("provider") ?? "");
+  if (!KEY_PROVIDERS.includes(provider as KeyProvider)) {
+    return { error: "Unknown provider." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("clear_api_credential", {
+    p_provider: provider,
+    p_org: CE_ORG_ID,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/settings");
+  return { ok: "Removed." };
 }

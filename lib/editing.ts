@@ -18,10 +18,17 @@
  * Off again for everyone but the founder, 2026-08-21: the market is finished
  * and rehearsable, but no creator should be spending credits on it until the
  * editor pool is real. Every gate on it (the rail row, /editing, the board,
- * the job workspaces) lets a founder through and 404s everyone else, so
- * turning this back to `true` is the launch and nothing else changes.
+ * the job workspaces) lets a founder through, so turning this back to `true`
+ * is the launch and nothing else changes.
+ *
+ * Off on creator empire, 2026-08-28, and this time it is announced rather than
+ * hidden. A student who was shown an Editing row yesterday and a 404 today
+ * would read that as the app breaking, so the row stays on the rail wearing a
+ * `soon` chip and /editing renders `app/(dash)/editing/soon.tsx`. The code
+ * underneath is untouched: this const is still the only switch, and every page
+ * behind it still checks for itself.
  */
-export const EDITING_ENABLED = true;
+export const EDITING_ENABLED = false;
 
 /**
  * Hiring, which is a smaller thing than the market and ships ahead of it.

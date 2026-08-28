@@ -118,7 +118,7 @@ export function ApplyForm({
             type="url"
             defaultValue={initial?.portfolio_url ?? ""}
             placeholder="drive.google.com/... or youtube.com/@..."
-            hint="already have one? paste it. no portfolio yet is fine too, you can build a free one here after you apply."
+            hint="paste one if you have it. you can build a free one here after."
           />
           <Field
             label="software"

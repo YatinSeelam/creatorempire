@@ -1,5 +1,6 @@
 "use server";
 
+import { apiKey } from "@/lib/api-keys";
 import { revalidatePath } from "next/cache";
 import {
   connectUrl,
@@ -167,6 +168,9 @@ export async function connectLink(
 
 export async function schedulePost(_prev: PostState, formData: FormData): Promise<PostState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "Your session expired. Sign in again." };
 
   // the deal is what decides which set of accounts this goes out of, so it is
@@ -230,6 +234,7 @@ export async function schedulePost(_prev: PostState, formData: FormData): Promis
   let result;
   try {
     result = await publishVideo({
+      key: postKey,
       username: profile.upload_post_username,
       platforms,
       caption,
@@ -308,6 +313,9 @@ export async function schedulePost(_prev: PostState, formData: FormData): Promis
  */
 export async function editPost(_state: PostState, formData: FormData): Promise<PostState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "Your session expired. Sign in again." };
 
   const id = String(formData.get("post_id") ?? "").trim();
@@ -357,10 +365,14 @@ export async function editPost(_state: PostState, formData: FormData): Promise<P
 
   if (!needsResend) {
     try {
-      const kept = await editScheduledJob(post.job_id as string, {
-        scheduledDate: timeChanged && scheduledFor ? scheduledFor : undefined,
-        caption: captionChanged ? caption : undefined,
-      });
+      const kept = await editScheduledJob(
+        post.job_id as string,
+        {
+          scheduledDate: timeChanged && scheduledFor ? scheduledFor : undefined,
+          caption: captionChanged ? caption : undefined,
+        },
+        postKey
+      );
       // their 404. the job fired or was pulled while this form was open, so the
       // row on screen is out of date and writing to it would make that worse.
       if (!kept) return { error: "Upload-Post no longer has that job. Reload the queue." };
@@ -400,7 +412,7 @@ export async function editPost(_state: PostState, formData: FormData): Promise<P
     // false is their 404: nothing left to cancel. the row is scheduled and the
     // slot is still minutes out, so the job cannot have fired — sending again
     // cannot double post.
-    await cancelScheduledJob(post.job_id as string);
+    await cancelScheduledJob(post.job_id as string, postKey);
   } catch {
     return { error: "Could not reach the posting service. Nothing changed." };
   }
@@ -408,6 +420,7 @@ export async function editPost(_state: PostState, formData: FormData): Promise<P
   let result;
   try {
     result = await publishVideo({
+      key: postKey,
       username: profile.upload_post_username,
       platforms,
       caption,
@@ -462,6 +475,9 @@ export async function editPost(_state: PostState, formData: FormData): Promise<P
  */
 export async function reschedulePost(postId: string, scheduledIso: string): Promise<PostState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "Your session expired. Sign in again." };
 
   const id = String(postId ?? "").trim();
@@ -490,7 +506,7 @@ export async function reschedulePost(postId: string, scheduledIso: string): Prom
   if (post.scheduled_for === scheduledFor) return { ok: "Already there." };
 
   try {
-    const kept = await editScheduledJob(post.job_id as string, { scheduledDate: scheduledFor });
+    const kept = await editScheduledJob(post.job_id as string, { scheduledDate: scheduledFor }, postKey);
     // their 404: the job fired or was pulled while the calendar was open, so
     // the card on screen is stale and writing the move would make that worse.
     if (!kept) return { error: "Upload-Post no longer has that job. Reload the page." };
@@ -532,6 +548,9 @@ export async function cancelPost(
   formData: FormData
 ): Promise<PostState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "Sign in again." };
 
   const id = String(formData.get("post_id") ?? "").trim();
@@ -554,7 +573,7 @@ export async function cancelPost(
   if (post.job_id) {
     try {
       // true is a real cancel; false is their 404.
-      lost = !(await cancelScheduledJob(post.job_id));
+      lost = !(await cancelScheduledJob(post.job_id, postKey));
     } catch {
       return { error: "Could not reach the posting service. Try again in a minute." };
     }

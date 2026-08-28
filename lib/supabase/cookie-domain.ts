@@ -43,13 +43,18 @@ function apex(): string {
  * Pure on purpose: the proxy imports this and must not pull in next/headers.
  */
 export function authCookieDomain(
-  host: string | null | undefined
+  _host: string | null | undefined
 ): string | undefined {
-  const name = (host ?? "").split(":")[0].toLowerCase();
+  // the host header is deliberately NOT consulted. this deploy is reached
+  // through the ugc flows proxy (ugcflows.com/<slug> rewritten to the vercel
+  // host), and behind that rewrite the header names the vercel host while
+  // the browser is on www.ugcflows.com. matching the header would write a
+  // host-only cookie next to ugc flows' domain-wide one: two cookies, same
+  // name, and the refresh storm the purge in proxy.ts exists for. so the
+  // domain is whatever SITE_URL says, full stop. a preview deploy leaves
+  // SITE_URL unset, apex() comes back "" and the cookie stays host-only.
   const root = apex();
-  if (!root) return undefined;
-  if (name === root || name.endsWith(`.${root}`)) return `.${root}`;
-  return undefined;
+  return root ? `.${root}` : undefined;
 }
 
 /**

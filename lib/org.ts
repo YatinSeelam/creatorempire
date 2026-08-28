@@ -84,9 +84,9 @@ export const ROLE_LABEL: Record<OrgRole, string> = {
 };
 
 export const ROLE_NOTE: Record<OrgRole, string> = {
-  owner: "Everything an admin can do, plus roles and removing people.",
-  admin: "Runs the programme: students, invites and the numbers. Changes no deal.",
-  creator: "A student. Works their deals inside the programme; their personal deals stay off these books.",
+  owner: "Everything an admin does, plus roles and removing people.",
+  admin: "Runs invites, roles and the numbers. Touches no deal.",
+  creator: "Works deals on these books. Their own stay off them.",
 };
 
 /** An admin's read is read-only by design, so this is the whole permission model. */
@@ -533,21 +533,44 @@ export function slugFromHost(host: string | null): string | null {
  * subdomain in front of a vercel preview host — so it falls back to production,
  * which is at least a real address rather than a dead one.
  */
+/** The host this request came in on, or the deploy's own when there is none. */
+function hostOf(requestHost?: string | null): string {
+  const raw = (requestHost ?? "").toLowerCase().trim();
+  return raw || PRODUCT_HOST;
+}
+
+/** `http` only for a loopback address; everything else is served over tls. */
+function schemeFor(host: string): "http" | "https" {
+  const name = host.split(":")[0];
+  return name === "localhost" || name.endsWith(".localhost") || name === "127.0.0.1"
+    ? "http"
+    : "https";
+}
+
+/**
+ * The origin to mint a link on: the host the request asking for it arrived on,
+ * so a link copied in dev opens on the port you are already using and one
+ * copied in production carries the real domain.
+ */
+export function originFor(requestHost?: string | null): string {
+  const host = hostOf(requestHost);
+  return `${schemeFor(host)}://${host}`;
+}
+
 export function tenantHost(
   org: { slug: string; custom_domain?: string | null },
   requestHost?: string | null
 ): string {
   if (org.custom_domain) return org.custom_domain;
 
-  const raw = (requestHost ?? "").toLowerCase();
-  const [name, port] = raw.split(":");
-
-  if (name === "localhost" || name.endsWith(".localhost")) {
-    return `${org.slug}.localhost${port ? `:${port}` : ""}`;
-  }
-
-  // see TENANT_SUBDOMAINS_LIVE: a subdomain nothing answers on is a dead link.
-  if (!TENANT_SUBDOMAINS_LIVE) return PRODUCT_HOST;
+  // see TENANT_SUBDOMAINS_LIVE. `acme.localhost:3000` used to be returned here
+  // for a dev request, on the theory that browsers resolve the whole .localhost
+  // tld to the loopback so it costs nothing. It costs the sign-in: this deploy
+  // does no host lookup at all, and the supabase auth cookie is scoped to one
+  // origin, so a link minted on a subdomain sends people through a login whose
+  // pkce verifier was written somewhere they are not. That is exactly what the
+  // invite link did. One workspace, one host, in dev as in production.
+  if (!TENANT_SUBDOMAINS_LIVE) return hostOf(requestHost);
 
   return `${org.slug}.${TENANT_ROOT}`;
 }
@@ -558,8 +581,6 @@ export function hasOwnHost(
   requestHost?: string | null
 ): boolean {
   if (org.custom_domain) return true;
-  const name = (requestHost ?? "").toLowerCase().split(":")[0];
-  if (name === "localhost" || name.endsWith(".localhost")) return true;
   return TENANT_SUBDOMAINS_LIVE;
 }
 
@@ -569,11 +590,7 @@ export function tenantUrl(
   requestHost?: string | null
 ): string {
   const host = tenantHost(org, requestHost);
-  const scheme =
-    host.startsWith("localhost") || host.includes(".localhost")
-      ? "http"
-      : "https";
-  return `${scheme}://${host}`;
+  return `${schemeFor(host)}://${host}`;
 }
 
 // --------------------------------------------------------------- addresses
@@ -705,10 +722,10 @@ export function inviteLink(
   // accept, and the old /agency/join path bounced them off the gate into the
   // pricing screen. the proxy forwards the old path for links already sent.
   //
-  // minted on the agency's OWN address, so the whole journey — the invite,
-  // the login it bounces through, the dashboard it lands on — happens under
-  // the agency's name. the auth cookie is scoped to the deploy's own apex
-  // (lib/supabase/cookie-domain.ts), which is what makes that one journey
-  // instead of a second sign-in.
-  return `${tenantUrl(org, requestHost)}/join/${token}`;
+  // minted on the host that asked for it, NOT on a per-workspace address.
+  // there is one workspace here and no host lookup, so a subdomain is a host
+  // this app never resolves and, worse, a second origin: the sign-in it bounces
+  // through writes its pkce verifier there and the callback cannot read it back.
+  // that is the whole of "that sign-in did not finish in this browser".
+  return `${originFor(requestHost)}/join/${token}`;
 }

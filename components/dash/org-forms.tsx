@@ -160,30 +160,16 @@ export function RolePicker({
     <div className="grid gap-x-3 gap-y-2.5 sm:grid-cols-[minmax(0,1fr)_180px_auto] sm:items-end">
       {field}
 
-      {/* The listener sits on a wrapper rather than on `Select` itself, so the
-          shared primitive keeps one shape for every form in the app. React's
-          change event bubbles, and this wrapper contains nothing but the select,
-          so nothing else can reach it. A listener on the whole row would hear
-          the email field on every keystroke instead and set the role to whatever
-          had been typed, which is why the wrapper is this tight; the instanceof
-          is what says so to the type checker as well as to the next reader. */}
-      <div
-        onChange={(e) => {
-          if (e.target instanceof HTMLSelectElement) {
-            setRole(e.target.value as OrgRole);
-          }
-        }}
-      >
-        <Select
-          label="Role"
-          name="role"
-          defaultValue="creator"
-          // no Owner: `orgs.owner_id` is the owner permission and an invite
-          // never moves it, so the seat would draw Branding on the rail and
-          // have every write on it refused. one founder per workspace.
-          options={INVITE_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
-        />
-      </div>
+      <Select
+        label="Role"
+        name="role"
+        defaultValue="creator"
+        // no Owner: `orgs.owner_id` is the owner permission and an invite
+        // never moves it, so the seat would draw Branding on the rail and
+        // have every write on it refused. one founder per workspace.
+        options={INVITE_ROLES.map((r) => ({ value: r, label: ROLE_LABEL[r] }))}
+        onChange={(v) => setRole(v as OrgRole)}
+      />
 
       {/* the button is wrapped so it keeps its own width in a stretched grid
           cell, and so the cell it sits in can be the one that hugs its content. */}

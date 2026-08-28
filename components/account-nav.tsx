@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { brand } from "@/lib/content";
 import { Mark } from "./art";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * The header for signed-in pages.
@@ -36,7 +37,7 @@ export function AccountNav({ showDashboard = false }: { showDashboard?: boolean 
 
           {/* a form, not a link. signing out is a state change and a GET that
               changes state gets fired by every link prefetcher there is. */}
-          <form action="/auth/sign-out" method="post">
+          <form action={`${BASE_PATH}/auth/sign-out`} method="post">
             <button
               type="submit"
               className="flex min-h-[44px] items-center text-sm font-semibold text-ink-70 transition-colors hover:text-ink"

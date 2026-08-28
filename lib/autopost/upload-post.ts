@@ -80,13 +80,22 @@ function messageOf(body: unknown): string | null {
 const TIMEOUT_MS = 20_000;
 const UPLOAD_TIMEOUT_MS = 45_000;
 
+/**
+ * `apiKey` is handed in by the caller now rather than read off the env here.
+ *
+ * A workspace can bring its own upload-post account, and this file has no way
+ * to know whose post it is sending — every exported function below therefore
+ * takes an optional key and passes it through. The env stays as the fallback,
+ * so a deploy that has only ever had one key never notices.
+ */
 async function api<T>(
   path: string,
   init: RequestInit = {},
-  timeoutMs = TIMEOUT_MS
+  timeoutMs = TIMEOUT_MS,
+  apiKey?: string | null
 ): Promise<T> {
-  const key = process.env.UPLOAD_POST_API_KEY;
-  if (!key) throw new UploadPostError("UPLOAD_POST_API_KEY is not configured", 500);
+  const key = apiKey?.trim() || process.env.UPLOAD_POST_API_KEY;
+  if (!key) throw new UploadPostError("no upload-post key is configured", 500);
 
   let res: Response;
   try {
@@ -136,13 +145,21 @@ async function api<T>(
  * POST /uploadposts/users. A 409 means the profile already exists, and since
  * the username is deterministic per user that is success, not failure.
  */
-export async function createManagedProfile(username: string): Promise<void> {
+export async function createManagedProfile(
+  username: string,
+  key?: string | null
+): Promise<void> {
   try {
-    await api("/uploadposts/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username }),
-    });
+    await api(
+      "/uploadposts/users",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username }),
+      },
+      TIMEOUT_MS,
+      key
+    );
   } catch (err) {
     if (err instanceof UploadPostError && err.status === 409) return;
     throw err;
@@ -156,7 +173,8 @@ export async function createManagedProfile(username: string): Promise<void> {
  */
 export async function whiteLabelLink(
   username: string,
-  redirectUrl: string
+  redirectUrl: string,
+  key?: string | null
 ): Promise<string> {
   // the page is hosted on their domain by design — that is what spares us
   // three platform app approvals — but the title, description and logo are
@@ -179,15 +197,25 @@ export async function whiteLabelLink(
         show_calendar: false,
         redirect_url: redirectUrl,
       }),
-    }
+    },
+    TIMEOUT_MS,
+    key
   );
   if (!body.access_url) throw new UploadPostError("Upload-Post returned no connect URL", 502);
   return body.access_url;
 }
 
 /** GET /uploadposts/users, filtered to ours. Null when it does not exist. */
-export async function getProfile(username: string): Promise<UploadPostProfile | null> {
-  const body = await api<{ profiles?: UploadPostProfile[] }>("/uploadposts/users");
+export async function getProfile(
+  username: string,
+  key?: string | null
+): Promise<UploadPostProfile | null> {
+  const body = await api<{ profiles?: UploadPostProfile[] }>(
+    "/uploadposts/users",
+    {},
+    TIMEOUT_MS,
+    key
+  );
   return body.profiles?.find((p) => p.username === username) ?? null;
 }
 
@@ -220,11 +248,19 @@ export type FacebookPage = { id: string; name: string };
  * ways, and this is ported from the sister project's client which has been
  * doing it in production for months.
  */
-export async function listFacebookPages(username: string): Promise<FacebookPage[]> {
+export async function listFacebookPages(
+  username: string,
+  key?: string | null
+): Promise<FacebookPage[]> {
   const body = await api<{
     pages?: Record<string, unknown>[];
     data?: Record<string, unknown>[];
-  }>(`/uploadposts/facebook/pages?profile=${encodeURIComponent(username)}`);
+  }>(
+    `/uploadposts/facebook/pages?profile=${encodeURIComponent(username)}`,
+    {},
+    TIMEOUT_MS,
+    key
+  );
 
   const raw = body.pages ?? body.data ?? [];
   return raw.flatMap((p) => {
@@ -282,6 +318,8 @@ export function publishVideo(input: {
    *  upstream and the payload without this argument is byte for byte what it
    *  was before options existed. */
   options?: PostOptions | null;
+  /** the workspace's own upload-post key, when it has one. */
+  key?: string | null;
 }): Promise<PublishResult> {
   const form = new FormData();
   form.append("user", input.username);
@@ -302,7 +340,8 @@ export function publishVideo(input: {
   return api<PublishResult>(
     "/upload",
     { method: "POST", body: form },
-    UPLOAD_TIMEOUT_MS
+    UPLOAD_TIMEOUT_MS,
+    input.key
   );
 }
 
@@ -419,13 +458,14 @@ export type JobStatus = {
 /** GET /uploadposts/status — job_id for scheduled posts, request_id for async
  *  immediate uploads. Exactly one. */
 export function getJobStatus(
-  params: { jobId: string } | { requestId: string }
+  params: { jobId: string } | { requestId: string },
+  key?: string | null
 ): Promise<JobStatus> {
   const query =
     "jobId" in params
       ? `job_id=${encodeURIComponent(params.jobId)}`
       : `request_id=${encodeURIComponent(params.requestId)}`;
-  return api<JobStatus>(`/uploadposts/status?${query}`);
+  return api<JobStatus>(`/uploadposts/status?${query}`, {}, TIMEOUT_MS, key);
 }
 
 /**
@@ -447,7 +487,8 @@ export function getJobStatus(
  */
 export async function editScheduledJob(
   jobId: string,
-  patch: { scheduledDate?: string; caption?: string }
+  patch: { scheduledDate?: string; caption?: string },
+  key?: string | null
 ): Promise<boolean> {
   const body: Record<string, string> = {};
   if (patch.scheduledDate) body.scheduled_date = patch.scheduledDate;
@@ -462,11 +503,16 @@ export async function editScheduledJob(
   if (Object.keys(body).length === 0) return true;
 
   try {
-    await api(`/uploadposts/schedule/${encodeURIComponent(jobId)}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    await api(
+      `/uploadposts/schedule/${encodeURIComponent(jobId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      TIMEOUT_MS,
+      key
+    );
     return true;
   } catch (err) {
     if (err instanceof UploadPostError && err.status === 404) return false;
@@ -478,9 +524,17 @@ export async function editScheduledJob(
  * DELETE /uploadposts/schedule/{job_id}. A 404 means the job already fired or
  * was already canceled — the caller decides what that means for its row.
  */
-export async function cancelScheduledJob(jobId: string): Promise<boolean> {
+export async function cancelScheduledJob(
+  jobId: string,
+  key?: string | null
+): Promise<boolean> {
   try {
-    await api(`/uploadposts/schedule/${encodeURIComponent(jobId)}`, { method: "DELETE" });
+    await api(
+      `/uploadposts/schedule/${encodeURIComponent(jobId)}`,
+      { method: "DELETE" },
+      TIMEOUT_MS,
+      key
+    );
     return true;
   } catch (err) {
     if (err instanceof UploadPostError && err.status === 404) return false;

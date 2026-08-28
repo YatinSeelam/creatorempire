@@ -5,9 +5,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { brand } from "@/lib/content";
+import { EDITING_ENABLED } from "@/lib/editing";
 import { AGENCY_HREF, AGENCY_PEOPLE_HREF, type OrgRole } from "@/lib/org";
 import type { Viewer } from "@/lib/viewer";
 import { AccountMenu } from "./account-menu";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * The rail. One workspace, so there is no picker at the top: the logo and the
@@ -93,7 +95,13 @@ const SettingsIcon = (
   </>
 );
 
-export type NavRow = { href: string; label: string; icon: ReactNode };
+export type NavRow = {
+  href: string;
+  label: string;
+  icon: ReactNode;
+  /** a quiet word after the label. only "soon" so far, on a row not open yet. */
+  badge?: string;
+};
 
 const studentRows: NavRow[] = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
@@ -132,7 +140,16 @@ function NavLink({
       }`}
     >
       <Icon>{row.icon}</Icon>
-      {row.label}
+      <span className="truncate">{row.label}</span>
+      {row.badge && (
+        <span
+          className={`ml-auto shrink-0 rounded-pill px-1.5 py-0.5 text-[10.5px] font-bold uppercase tracking-[0.06em] ${
+            active ? "bg-on-accent/20 text-on-accent" : "bg-rail-hover text-on-rail/80"
+          }`}
+        >
+          {row.badge}
+        </span>
+      )}
     </Link>
   );
 }
@@ -158,7 +175,10 @@ function Logo({ small = false }: { small?: boolean }) {
       aria-label={brand.name}
     >
       <Image
-        src="/logo.png"
+        // next/image does not prefix `src` with basePath, only the optimiser
+        // endpoint it points at, so a bare /logo.png is a 404 under the
+        // /creatorempire prefix. same for every other public file below.
+        src={`${BASE_PATH}/logo.png`}
         alt=""
         width={small ? 32 : 36}
         height={small ? 32 : 36}
@@ -187,9 +207,20 @@ export function SideNav({
 }) {
   const pathname = usePathname();
 
+  // the editing row stays on the rail while the feature is off, wearing the
+  // word that says so. hiding it and then bringing it back reads as the app
+  // changing shape under somebody; a `soon` chip is one row of honesty and the
+  // page behind it says the same thing at length. a founder sees the real
+  // thing, because they are the one rehearsing it.
+  const work = studentRows.map((row) =>
+    row.href === "/editing" && !EDITING_ENABLED && !isFounder
+      ? { ...row, badge: "soon" }
+      : row
+  );
+
   // everyone gets the work rows. running the programme adds a second group
   // rather than swapping the first out: an owner posts and edits too.
-  const rows = agencyRole ? [...studentRows, ...adminRows] : studentRows;
+  const rows = agencyRole ? [...work, ...adminRows] : work;
   const tail = [...(isFounder ? [founderRow] : []), settingsRow];
   const all = [...rows, ...tail];
 
@@ -209,7 +240,7 @@ export function SideNav({
 
         <nav className="mt-7 flex flex-col">
           <Group label={agencyRole ? "work" : undefined}>
-            {studentRows.map((l) => (
+            {work.map((l) => (
               <NavLink key={l.href} row={l} active={isActive(l.href)} />
             ))}
           </Group>

@@ -11,7 +11,6 @@ import {
   fetchInstagramReels,
   fetchTiktokVideos,
   fetchYoutubeShorts,
-  hasApiKey,
   SC_ENDPOINT,
   type ScFetch,
 } from "./scrapecreators";
@@ -21,6 +20,7 @@ import {
   normalizeTiktok,
   normalizeYoutube,
 } from "./normalize";
+import { apiKey } from "@/lib/api-keys";
 import { createServiceClient } from "@/lib/supabase/service";
 import { creditsUsedToday, dailyCapFor, logUsage } from "./usage";
 import { detectProfile } from "./detect";
@@ -90,22 +90,27 @@ function explain(status: number | null): { reason: Reason; error: string; retrya
   }
 }
 
-function fetchFor(profile: DetectedProfile, cursor: string | null): Promise<ScFetch> {
+function fetchFor(
+  profile: DetectedProfile,
+  cursor: string | null,
+  key: string
+): Promise<ScFetch> {
   switch (profile.platform) {
     case "tiktok":
-      return fetchTiktokVideos({ handle: profile.handle, cursor });
+      return fetchTiktokVideos({ handle: profile.handle, cursor, key });
     case "instagram":
-      return fetchInstagramReels({ handle: profile.handle, cursor });
+      return fetchInstagramReels({ handle: profile.handle, cursor, key });
     case "youtube":
       return fetchYoutubeShorts({
         handle: profile.handle,
         channelId: profile.channelId,
         cursor,
+        key,
       });
     case "facebook":
       // the one endpoint that wants the page url rather than the handle, and
       // detectProfile has already built the tidy form of it.
-      return fetchFacebookReels({ pageUrl: profile.profileUrl, cursor });
+      return fetchFacebookReels({ pageUrl: profile.profileUrl, cursor, key });
   }
 }
 
@@ -141,8 +146,15 @@ export async function scrapeProfilePage(args: {
     return fail("bad_url", "that is not a tiktok, instagram, youtube or facebook profile link");
   }
 
-  if (!hasApiKey()) {
-    return fail("not_configured", "scraping is not set up on this deploy yet");
+  // the workspace's key first, the deploy's env second. resolved here rather
+  // than tested inside the client, because whether scraping is configured is a
+  // question about the person the scrape belongs to, not about the deploy.
+  const key = await apiKey("scrapecreators", args.userId);
+  if (!key) {
+    return fail(
+      "not_configured",
+      "scraping is not set up yet, add a scrapecreators key in settings"
+    );
   }
 
   // deliberate: no service client means no ledger, and no ledger means credits
@@ -170,7 +182,7 @@ export async function scrapeProfilePage(args: {
   // paging is the caller passing the cursor back on the next click, so the
   // person spending the credits is the one deciding to spend them.
   const cursor = args.cursor ?? null;
-  const result = await fetchFor(profile, cursor);
+  const result = await fetchFor(profile, cursor, key);
 
   if (!result.ok) {
     const { reason, error, retryable } = explain(result.status);

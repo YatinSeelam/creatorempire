@@ -4,6 +4,7 @@ import { loadAutopostWorkspace } from "@/lib/autopost/batch-server";
 import { createClient } from "@/lib/supabase/server";
 import { currentTz } from "@/lib/tz-server";
 import { wallClock } from "@/lib/tz";
+import { BASE_PATH } from "@/lib/base-path";
 
 export const metadata = { title: "Autoposting · Creator Empire" };
 
@@ -165,7 +166,7 @@ export default async function AutopostingPage() {
               {/* a plain anchor: the route answers with a file and client
                   navigation would swallow the download. *\/}
               <a
-                href="/social/export"
+                href={`${BASE_PATH}/social/export`}
                 download
                 className="flex h-9 items-center rounded-pill border border-line bg-paper px-4 text-[13.5px] font-semibold text-ink-70 transition-colors hover:text-ink"
               >

@@ -1,7 +1,9 @@
 import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { claimPendingInvite } from "@/lib/invite-claim";
 import { safeNext as sameOriginPath } from "@/lib/safe-next";
+import { SITE_URL } from "@/lib/site-url";
 
 /**
  * Where google and the email confirmation link both land.
@@ -9,9 +11,18 @@ import { safeNext as sameOriginPath } from "@/lib/safe-next";
  * Google (and the default confirm email) come back with `?code=`, which is the
  * pkce code we swap for a session. A magic-link style template instead sends
  * `token_hash` + `type`, so both are handled here rather than in two routes.
+ *
+ * Every redirect out of here is built on SITE_URL rather than the request's own
+ * origin or `x-forwarded-host`. In production this app is served through a
+ * rewrite on www.ugcflows.com, so both of those read as the internal vercel
+ * host and would drop somebody who just signed in onto a url that is not the
+ * one their session cookie was written for. SITE_URL carries the base path too,
+ * so `${SITE_URL}/dashboard` is the whole answer and nothing here has to know
+ * about the prefix. On localhost it is http://localhost:3000, which is what the
+ * origin used to be anyway.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
@@ -29,25 +40,23 @@ export async function GET(request: NextRequest) {
       : await supabase.auth.verifyOtp({ type: type!, token_hash: tokenHash! });
 
     if (!error) {
-      // behind vercel the host header is the internal one, so trust the
-      // forwarded host in production only.
-      const forwardedHost = request.headers.get("x-forwarded-host");
-      const base =
-        process.env.NODE_ENV === "development" || !forwardedHost
-          ? origin
-          : `https://${forwardedHost}`;
+      // a seat is claimed here, on the one request where a session has just
+      // come into existence, so somebody the programme added lands on the
+      // dashboard rather than on the "not on the roster" page. no-ops when
+      // there is no invite waiting.
+      await claimPendingInvite(supabase);
 
-      const response = NextResponse.redirect(`${base}${next}`);
+      const response = NextResponse.redirect(`${SITE_URL}${next}`);
       return response;
     }
 
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(friendly(error.message))}`
+      `${SITE_URL}/login?error=${encodeURIComponent(friendly(error.message))}`
     );
   }
 
   return NextResponse.redirect(
-    `${origin}/login?error=${encodeURIComponent(
+    `${SITE_URL}/login?error=${encodeURIComponent(
       providerError || "That sign-in link is invalid or has expired."
     )}`
   );

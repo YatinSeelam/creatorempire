@@ -120,7 +120,7 @@ export async function GET(request: Request) {
           `the provider balance is down to **${balance}** credits.`,
           "the nightly sync stops spending under 25 and the manual refresh under 10, so numbers go stale before anything breaks.",
         ],
-        cta: { label: "see usage", url: "https://www.creatorempire.app/founder/usage" },
+        cta: { label: "see usage", url: "https://www.creatorempire.app/founder" },
       }),
     });
   }

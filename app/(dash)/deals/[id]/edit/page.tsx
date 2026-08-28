@@ -391,7 +391,7 @@ export default async function DealEditPage({
               <span className="font-semibold text-ink-70">Track</span> a handle instead to read the
               views only, no login, nothing gets posted.
               {!connections.configured &&
-                " Connecting is off on this deploy until UPLOAD_POST_API_KEY is set."}
+                " Connecting is off until an upload-post key is added in settings."}
             </p>
 
             {PLATFORMS.map((platform) => {
@@ -422,8 +422,11 @@ export default async function DealEditPage({
                             @{handle}
                           </a>
                         ) : (
-                          <p className="text-[15px] font-bold tracking-[-0.015em] text-ink-50">
-                            {PLATFORM_LABEL[platform]}
+                          // the mark leading this row already said which
+                          // platform it is; repeating the word as the title
+                          // left the row saying nothing about its own state.
+                          <p className="text-[15px] font-semibold tracking-[-0.015em] text-ink-50">
+                            not added
                           </p>
                         )}
                         {posting && <Pill tone="flame">posting</Pill>}

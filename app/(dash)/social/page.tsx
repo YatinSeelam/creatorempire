@@ -1,5 +1,6 @@
 import { SocialPlanner, type PlannerDeal } from "@/components/dash/social-planner";
 import { DashBar, Page, Pill, barTitle } from "@/components/dash/ui";
+import { hasApiKey } from "@/lib/api-keys";
 import { reconcilePosts, type SocialPost } from "@/lib/autopost/server";
 import { brandLogo } from "@/lib/brand-catalog";
 import { createClient } from "@/lib/supabase/server";
@@ -80,7 +81,7 @@ export default async function SocialPlannerPage() {
   // same pass the per-deal tab runs: ask upstream about anything still in
   // flight so a slot that already fired does not sit on the grid as movable.
   // it skips terminal rows, so this is a call per pending post, not per post.
-  if (process.env.UPLOAD_POST_API_KEY) {
+  if (user && (await hasApiKey("upload_post", user.id))) {
     posts = await reconcilePosts(supabase, posts).catch(() => posts);
   }
 

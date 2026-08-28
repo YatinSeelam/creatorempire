@@ -408,8 +408,8 @@ export async function inviteMember(form: FormData) {
   revalidatePath(AGENCY_PEOPLE_HREF);
   back(
     mailed
-      ? `Invite sent to ${email}. The link is below too if they miss it.`
-      : `Invite ready for ${email}. Copy the link below and send it to them.`,
+      ? `Invite sent to ${email}.`
+      : `Invite ready for ${email}. Copy the link below.`,
     AGENCY_PEOPLE_HREF
   );
 }
@@ -451,13 +451,10 @@ export async function removeMember(form: FormData) {
   // saying "removed" over a seat that is still there is the one lie this
   // page could tell, so the count is checked.
   if (!data || data.length === 0)
-    back(
-      "Only the owner can remove somebody from the roster.",
-      AGENCY_PEOPLE_HREF
-    );
+    back("Only the owner can remove somebody.", AGENCY_PEOPLE_HREF);
 
   revalidatePath(AGENCY_PEOPLE_HREF);
-  back("Removed from the roster.", AGENCY_PEOPLE_HREF);
+  back("Removed.", AGENCY_PEOPLE_HREF);
 }
 
 export async function acceptInvite(token: string) {

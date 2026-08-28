@@ -8,7 +8,7 @@ import {
   type PostState,
 } from "@/app/(dash)/social/actions";
 import { PlatformGlyph } from "@/components/dash/platform-glyph";
-import { Note, Submit } from "@/components/dash/form";
+import { Note, Picker, Submit } from "@/components/dash/form";
 import { Pill } from "@/components/dash/ui";
 import type { SocialPost } from "@/lib/autopost/server";
 import { MAX_CAPTION, YOUTUBE_TITLE_MAX } from "@/lib/autopost/limits";
@@ -117,19 +117,16 @@ export function ZonePicker({
   return (
     <label className="flex min-w-0 items-center gap-1.5 rounded-pill border border-line bg-shell px-3 py-1 text-[12.5px] text-ink-50 focus-within:border-flame">
       <span className="shrink-0">times in</span>
-      <select
+      <Picker
         value={zone}
         disabled={disabled}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label="the time zone every time on this tab is shown in"
-        className="min-w-0 max-w-[168px] cursor-pointer truncate bg-transparent font-semibold text-ink-70 focus:outline-none disabled:opacity-60"
-      >
-        {options.map((z) => (
-          <option key={z} value={z}>
-            {zoneLabel(z)}
-          </option>
-        ))}
-      </select>
+        onChange={onChange}
+        ariaLabel="the time zone every time on this tab is shown in"
+        options={options.map((z) => ({ value: z, label: zoneLabel(z) }))}
+        triggerClass="flex min-w-0 max-w-[168px] cursor-pointer items-center gap-1 bg-transparent font-semibold text-ink-70 focus:outline-none disabled:opacity-60"
+        chevronClass="size-3.5"
+        minPanelWidth={200}
+      />
     </label>
   );
 }

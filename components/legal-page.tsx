@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { brand, type LegalDoc } from "@/lib/content";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * The shell both legal pages render through. They are the same page with
@@ -23,7 +24,7 @@ export function LegalPage({ doc }: { doc: LegalDoc }) {
           className="flex w-fit items-center gap-2 text-[14px] font-bold tracking-[-0.01em]"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="" className="size-6 rounded-md object-cover" />
+          <img src={`${BASE_PATH}/logo.png`} alt="" className="size-6 rounded-md object-cover" />
           {brand.wordmark}
         </Link>
 

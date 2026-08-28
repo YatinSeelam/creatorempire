@@ -12,6 +12,7 @@ import { PLATFORMS, PLATFORM_LABEL, type DealStatus, type Platform } from "@/lib
 import { loadDeals, loadRefreshQuota, type DealListRow } from "@/lib/deals-server";
 import { money, shortDate, since, views as fmtViews } from "@/lib/money";
 import { createClient } from "@/lib/supabase/server";
+import { BASE_PATH } from "@/lib/base-path";
 
 export const metadata = { title: "Deals · Creator Empire" };
 
@@ -92,7 +93,7 @@ export default async function DealsPage() {
         <div className="flex flex-wrap items-center gap-2">
           {rows.length > 0 ? <RefreshAll quota={quota} /> : null}
           {rows.length > 0 ? (
-            <a href="/deals/export" download className={ghost}>
+            <a href={`${BASE_PATH}/deals/export`} download className={ghost}>
               export csv
             </a>
           ) : null}

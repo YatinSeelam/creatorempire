@@ -19,6 +19,7 @@
  */
 
 import { cache } from "react";
+import { hasApiKey } from "@/lib/api-keys";
 import { PLATFORMS, type Platform } from "@/lib/deals";
 import { BUCKET, PLAYABLE, STORAGE_URL_PREFIX, isStorageUrl } from "@/lib/editing-files";
 import { brandLogo } from "@/lib/brand-catalog";
@@ -64,6 +65,11 @@ export const loadAutopostWorkspace = cache(
     } = await supabase.auth.getUser();
     if (!user) return null;
 
+    // asked once, of the workspace first and the env second, because "can this
+    // deploy post at all" stopped being a question about the env the moment a
+    // programme could paste its own key in settings.
+    const configured = await hasApiKey("upload_post", user.id);
+
     const scope = await dealScope();
     const [col, op, value] = onBooks(scope);
 
@@ -90,7 +96,7 @@ export const loadAutopostWorkspace = cache(
         clips: [],
         hashtags: [],
         options: DEFAULT_OPTIONS,
-        configured: Boolean(process.env.UPLOAD_POST_API_KEY),
+        configured,
         connected: noneConnected(),
       };
     }
@@ -160,7 +166,7 @@ export const loadAutopostWorkspace = cache(
       loadConnections(supabase, user.id, dealId).catch(() => ({
         connected: {} as Record<string, string>,
         lastCheckedAt: null,
-        configured: Boolean(process.env.UPLOAD_POST_API_KEY),
+        configured,
       })),
       loadDealPosts(supabase, dealId),
       loadDealClips(supabase, dealId),

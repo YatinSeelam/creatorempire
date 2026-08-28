@@ -1,3 +1,500 @@
+2026-08-28 — its own repo, editing behind a soon page, and a refresh that
+outlives the tab
+
+the local .env pointed at supabase project xgiifxrxmtyklwglpewb while
+.env.local pointed at qtcwdvaoxrfojzaktwyg, and .env.local wins. so the app
+talked to one project holding the other one's secret key, and every service
+client path answered "Invalid API key": the cron 500'd on dueAccounts, the bell
+never filled, the scrape ledger refused to run and the accounts on the dead
+project wore "usage logging is not set up" as their last sync error. .env is
+now one complete correct file on qtcwdvaoxrfojzaktwyg with the working secret
+key, resend and the admin alert address, and .env.local is renamed to
+.env.local.retired-2026-08-28 so nothing shadows it. the cron then ran clean:
+1 account, 24 videos, 4 api calls, 0 failures. autoposting checked out too, 14
+of 17 profiles connected and 37 posts already delivered.
+
+editing is off (EDITING_ENABLED false) and says so. /editing serves a soon page
+instead of a 404, because the rail still draws an Editing row and a link the
+product draws must not lead to "this does not exist"; the row wears a `soon`
+chip and a founder still gets the real thing. app/(dash)/editing/soon.tsx is
+not a route file, so the flag is still the only door.
+
+the api keys panel came off /settings. the keys are the deploy's and
+org_api_credentials is empty, so apiKey() falls through to the env exactly as
+it always did; the component, the actions and the rpcs are untouched.
+
+the manual refresh now answers before it scrapes. the sweep moved into after(),
+so the reply is "pulling N accounts, about five minutes, you can close this",
+closing the tab cannot kill it, and the fresh-numbers email became the way
+anybody learns it finished. the confirm button stopped counting seconds it is
+no longer waiting for. the page polls itself every 45s for six minutes for
+whoever stays. a sweep that reaches a provider and fails still refunds itself,
+just after the reply rather than in it.
+
+/founder got a search and a filter. eighty accounts of which five matter had no
+way to answer "is this address in here", and the top band was five figures
+against seventeen hundred pixels of nothing, over a heading reading "Everyone".
+the search took the empty half of the band, chips took the heading's line, and
+the count at the end now says how much of the roster is showing. the cards are
+squared and painted by access: gold for a founder, the accent for a student,
+nothing at all for no access, with a light sweep on hover from the same
+variable. the list became a client component (components/dash/people-board.tsx)
+and the page hands it strings, because lib/founder.ts reaches for next/headers.
+
+
+2026-08-27 — served at www.ugcflows.com/creatorempire
+
+this app now runs under a path prefix on somebody else's domain. the ugc flows
+deploy rewrites `/creatorempire/:path*` to this vercel project and it still
+builds bare on localhost, off one env var.
+
+`NEXT_PUBLIC_SITE_URL` is the whole switch. `lib/base-path.ts` is new: it takes
+the pathname off that url, strips the trailing slash, and hands back "" for a
+bare origin or an unparseable value. next.config imports it for `basePath`
+(next.config.ts can require a local .ts, the config loader registers a swc hook
+for it, verified by loading the config and reading basePath back). assetPrefix
+is left alone because next already sets it to basePath when it is empty.
+`lib/site-url.ts` needed nothing: SITE_URL keeps the path, so `absoluteUrl()`
+and every `${site}/...` in lib already print the prefix.
+
+what next does for free, and what it does not:
+
+- `redirect()` from next/navigation prefixes basePath itself, both halves.
+  server components: `addPathPrefix(getURLFromRedirectError(err), basePath)` in
+  next/dist/server/app-render/app-render.js:2390. server actions:
+  `getAppRelativeRedirectUrl()` in dist/server/app-render/action-handler.js:238.
+  none of the 21 `redirect()` calls were touched.
+- the proxy is fine as it is. `request.nextUrl.pathname` comes in with the
+  prefix already stripped (NextURL.analyze) and `clone()` puts it back on
+  format, so PROTECTED matching and all five redirects in lib/supabase/proxy.ts
+  work unchanged.
+- next/link, next/image's optimiser endpoint, router.push, revalidatePath and
+  the file-convention icon are all prefixed automatically (checked the built
+  html: `/creatorempire/icon.png`, `/creatorempire/_next/static/...`).
+- next/image does NOT prefix `src`. `/logo.png` under a base path is a 404,
+  which is what the basePath doc means by "add the basePath in front of src".
+  side-nav, art.tsx's Mark, the three editor empty-state drawings and
+  legal-page's plain img all carry BASE_PATH now.
+
+what was built by hand and had to be fixed: the plain `<a href>` for the two
+csv exports and the dashboard link on /account, all six `<form
+action="/auth/sign-out">`, and the thumbnail proxy's `/api/scrape/thumb` src in
+components/dash/thumb.tsx. the redirects in app/auth/clear, app/auth/sign-out
+and app/editors/payouts/stripe all pass an absolute `/...` as the second half of
+`new URL()`, which wipes the prefix the request came in with, so they take
+BASE_PATH explicitly.
+
+sign in is the part that would have broken silently. `/auth/callback` used to
+redirect off `origin` or `x-forwarded-host`; behind the rewrite both of those
+are the internal vercel host, so the success redirect and both error redirects
+are built on SITE_URL now. same for `signInWithOAuth`'s `redirectTo` in
+components/auth-form.tsx, which was `window.location.origin` and is now
+`${SITE_URL}/auth/callback` so the prefix is in the url supabase has to match on
+its allow list.
+
+cookies were deliberately left at path "/" and the two purge helpers in
+lib/supabase/proxy.ts were not touched. this deploy points at the SAME supabase
+project as ugc flows, so one google sign-in has to cover both www.ugcflows.com
+and www.ugcflows.com/creatorempire. scoping the session to /creatorempire would
+split it. nothing at path "/" is foreign any more either, same project ref on
+both sides.
+
+ops, all of it:
+
+- vercel env on this project: `NEXT_PUBLIC_SITE_URL=https://www.ugcflows.com/creatorempire`.
+  it is inlined into the client bundles, so changing it is a rebuild, not a
+  restart. leave it at http://localhost:3000 in .env.local and localhost stays
+  prefix free.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` must be
+  the EXACT values ugc flows production uses. supabase-js names its cookie after
+  the first label of the api hostname, so a custom auth domain on one deploy and
+  the supabase.co address on the other write two different cookie names and the
+  shared session quietly becomes two sessions.
+- supabase auth: Site URL `https://www.ugcflows.com/creatorempire`, and
+  `https://www.ugcflows.com/creatorempire/auth/callback` on the redirect allow
+  list. google cloud's redirect uri does not change, it points at
+  `https://<ref>.supabase.co/auth/v1/callback` and always did.
+- vercel.json's cron path is now `/creatorempire/api/cron/refresh`, hardcoded.
+  the cron hits this project directly rather than through the rewrite, and with
+  basePath set the route genuinely lives at that path. it is the one place the
+  prefix is written out rather than derived, so it and NEXT_PUBLIC_SITE_URL have
+  to be changed together. `CRON_SECRET` is unchanged.
+- the stripe webhook url, if one is pointed here, moves under the prefix too.
+
+left alone on purpose: `lib/flow/use-flow.ts`'s `fetch("/api/flow/turn")` and
+`lib/flow/server.ts`'s image urls, because flow is not on this deploy, nothing
+imports either file and `app/api/flow` does not exist. the third party paths in
+lib/transcribe/sources.ts are somebody else's host. app/robots.ts still says
+disallow /, which is right but never read: a crawler asks www.ugcflows.com for
+robots.txt, not /creatorempire/robots.txt.
+
+one thing to watch on the first deploy: vercel rewrites to an external url send
+the TARGET host, so `authCookieDomain()` here sees the vercel host, returns
+undefined and writes a host-only cookie. the browser stores it on
+www.ugcflows.com either way, but ugc flows writes its own widened to
+`.ugcflows.com`. if the shared session does not hold, that is where to look.
+
+2026-08-27 — the ui was still asking the env
+
+the keys resolve through `apiKey(provider, userId)` now, but the "is this
+configured" checks did not: they were still `Boolean(process.env.X)`, so a
+programme that pasted an upload-post key in /settings on a deploy with no env
+key was told connecting was off while the posts themselves would have gone out
+fine. the boolean and the call have to answer the same question.
+
+- `loadConnections` and `loadAutopost` (lib/autopost/server.ts) ask
+  `hasApiKey("upload_post", userId)`. the user id was already an argument to
+  both, nothing new had to be threaded.
+- the autoposting workspace resolves it once at the top of the read and hands
+  the same boolean to the empty-deals return and to the `loadConnections`
+  catch. the catch is a plain arrow with no await in it, which is why the value
+  is computed before the promise rather than inside the fallback.
+- /social's reconcile pass, same question, and it now needs a user: no session
+  means no key to resolve and no posts to reconcile either.
+- the deal's connect panel said "until UPLOAD_POST_API_KEY is set", which names
+  a thing nobody reading it can set. it points at settings instead. the boolean
+  behind it is `connections.configured`, so it was already fixed upstream.
+- the profile scraper: `hasApiKey()` in lib/scrape/scrapecreators.ts is deleted
+  rather than rewired. an env-only check inside the client can only ever answer
+  for the deploy, and the client has no idea whose scrape it is. the caller
+  (`scrapeProfilePage`) resolves the key from `args.userId` and passes it to
+  `fetchFor`, which also closes a real gap: the check and the fetch were both
+  reading the env, and the fetch would have kept doing it.
+
+still env only, and deliberately: lib/transcribe/*, lib/apify.ts,
+lib/portfolio-import.ts and lib/variations/sound.ts. nothing under app/ imports
+any of them on this deploy (only `lib/variations/model` is reached, for the
+storage prefixes), so there is no user in scope to ask with and no screen that
+could be lying. they get the same treatment if a tool that uses them comes back.
+
+2026-08-27 — the keys belong to the programme, not to the env
+
+/settings grows an API panel, owner and admin only: scrapecreators, upload-post,
+apify, rapidapi and the youtube data api. paste one and every scrape and every
+post this workspace makes runs on it. paste none and the deploy's env vars carry
+on exactly as before, so nothing that works today changes.
+
+where the secret actually is
+- `supabase_vault`, encrypted, and NOT in the table. `org_api_credentials` holds
+  the vault id and the last four characters, so a copy of that table on its own
+  is worth nothing.
+- migration 20260827030000. the key is on the ORG rather than on a person: the
+  programme pays for scraping and posting and a student pastes nothing. billing
+  stays per person, `api_usage_events` and the daily cap are untouched, but the
+  credential every one of those calls travels on is the workspace's. verified:
+  the student's user id resolves to the founder's key.
+- a session can WRITE a key and can never read one back. `set_api_credential`
+  and `clear_api_credential` are definer functions that take the org from the
+  caller's own seat, so an admin cannot write onto a workspace they do not run
+  and there is no org argument to lie about. `read_api_credential` is granted to
+  `service_role` and nothing else. `secret_id` is never granted to a session at
+  all, and there is no insert, update or delete grant on the table.
+- tested against the live database rather than reasoned about: founder writes,
+  service role reads it back, the student inherits the same key, the student's
+  write raises, the student sees zero rows, `secret_id` and UPDATE are both
+  refused. the test key was cleared, vault included.
+
+the call sites, which were the real work
+- a key used to be a module scope `process.env` read, which can only ever answer
+  for the deploy. `lib/api-keys.ts` resolves per call — workspace first, env
+  second — and is `cache()`d, so a sweep over twenty accounts of one creator
+  asks the database once.
+- providers.ts: `RAPID_KEY()` and `YT_KEY()` are gone. the provider CHAIN names
+  a key rather than testing one, which is why `fetchAccountFeed` and
+  `availablePlatforms` are async now: "is this rung available" became a question
+  about a person. `opts.userId` was already threaded everywhere for the ledger,
+  so nothing else moved.
+- scrapecreators and apify take the key as an argument with env as the fallback.
+- upload-post was the awkward one: eight exported functions and an `api()` helper
+  with no idea whose post it is sending. every one takes an optional key now and
+  passes it through; `server.ts` resolves it from the profile row's user, and the
+  scheduler and social actions resolve it once per action rather than per post.
+
+not covered: the transcriber and the portfolio importer still read apify from
+the env only. both tools are deleted on this deploy, so there is no user id in
+scope to ask with and nothing to fix yet.
+
+2026-08-27 — post it now, and stop charging for sweeps that never left the building
+
+post now
+- the batch wizard could not schedule anything under five minutes out, and the
+  reason written next to the constant was "upstream rejects the schedule
+  anyway". true, and beside the point: upload-post owns the schedule, nothing in
+  this app fires a post, and leaving `scheduled_date` OFF the payload publishes
+  immediately. their minimum lead only applies to something handed to their
+  scheduler.
+- so three windows instead of one lead, in tools/autoposting/actions.ts: at or
+  inside two minutes (including a minute already past) the post is PUBLISHED
+  now, no scheduled_date at all; beyond that it is scheduled, floor one minute;
+  further back than an hour is a mistake and says so, because a batch still
+  reading 8am at four in the afternoon should not quietly fire the lot.
+- `scheduled_for` records what happened rather than what the form said, so a
+  post sent now does not sit in the queue as still to come. `rowFromPublish`
+  needed nothing: it already handled a response with no job id, the wizard had
+  simply never produced one.
+- a `now` button in the timing card, next to first post and start time. it sets
+  a minute from now with the seconds dropped, which the server reads as now. the
+  time inputs were already minute precise, they were never the problem.
+- moving an existing post keeps the scheduled floor with no now window in front
+  of it, because moving one is always a re-schedule upstream, never a publish.
+
+the refresh that charged for nothing
+- every account failed with "usage logging is not set up", which is thrown
+  BEFORE the first outbound call, and it still took one of the six monthly
+  refreshes. the rule is that anything reaching a provider is charged, and
+  `apiCalls` is what says whether one was reached: it is only written after a
+  fetch returns. so a sweep with zero api calls where every account failed is
+  handed back now. without it a missing env var could eat a whole month's
+  allowance telling somebody about its own configuration.
+- and the message ran two sentences together — "...cannot be pulled yet That
+  still used a refresh." `sentence()` ends a provider error before anything is
+  glued after it. the provider message itself lost its own trailing "so"
+  clause, which was composing into three of them in a row on the account row.
+
+2026-08-27 — the founder section is one page now
+
+- /founder/usage is deleted, page, actions and its controls component. it was
+  45kb of ledger listing every metered call ever made, read by one person,
+  reachable from one tab. what anybody opens it for is two questions — what is
+  this costing, and who is spending it — and both were already answered on the
+  page next to it.
+- the one thing it knew that nothing else did was the credit balance, the burn
+  rate and the runway, which is also what the cron emails about when it crosses
+  under 100. that comes with, as lib/founder-credits.ts `loadCreditHealth()`:
+  balance off the newest `credits_remaining` the provider reported, burn over a
+  fixed 30 days, runway from the two. it rides the Spend tile — what is left on
+  the face, what the spend is made of and how fast it is going in the fold
+  underneath, which is what `Stat`'s `detail` is for.
+  the burn is per CALENDAR day, where the old page divided by days that had
+  activity. with a sync that runs every third day that overstated the daily
+  burn threefold and cut the runway to a third of the truth.
+- the tab row is gone with it, and components/dash/founder-tabs.tsx. a nav with
+  one entry, naming the page you are already on, is furniture.
+- people are cards, not table rows. a row is right for scanning one column down
+  a hundred of them; each of these carries a face, four numbers and two
+  controls, and the table had to hold a controls column open whether or not a
+  row had anything to put in it. the face and name are the link, the picker and
+  view as are not, because a picker nested in an anchor is one click doing two
+  things.
+- the paragraph under the list explaining what access means is gone. the picker
+  says it in three words.
+
+lost on purpose, and worth knowing: `setUserCap` / `clearUserCap` went with the
+usage page. the per person daily credit cap is a row in `api_user_limits` and
+now has no screen; the system default still applies to everybody.
+
+then the same page again, half the height
+- the four totals were four cards a hundred and fifty pixels tall holding a
+  single digit each. one strip, five or six figures across it. credits joined
+  them rather than hiding in a fold, and the burn rate is the strip's `title`
+  because it is the answer to a question nobody asked yet.
+- the people were cards inside a panel, which is a border inside a border. the
+  panel is a heading and a count now, and the cards sit on the page.
+- a person was four stacked bands for a row of zeroes: name, a four column
+  number grid, a controls row, and last-seen alone at the bottom. it is two
+  bands. last seen went back onto the email line, and the numbers are one dotted
+  sentence with `view as` at the end of it, so nothing holds a column open for a
+  zero. roughly 90px a person against 230.
+
+2026-08-27 — founder cut to two tabs, access moved onto the person
+
+five tabs for a deploy that is one workspace. Agencies listed exactly one row,
+Editors runs a market this app does not run, and Access was a second list of the
+same human beings People already showed, keyed by email so you could not tell
+which row was the person you were reading about. All three routes deleted, with
+founder-controls.tsx and application-status.tsx.
+
+access is a picker on the row now, three states and nothing else: no access,
+student, founder. it writes exactly what lib/access.ts isEntitled reads, which
+is the whole reason it is safe to render as a control:
+
+  founder    admin_emails role 'founder'. the seat, if any, is left alone.
+  student    no grant, a seat on CE_ORG_ID with role 'creator'.
+  no access  neither. the account and everything in it stays.
+
+the grant goes through the caller's own session so the db guards are the check
+(you cannot change your own row, the last founder cannot go). the seat needs the
+service key, because sessions hold select/delete/update(role) on org_members and
+never insert. an owner seat is never touched: the workspace owner is pinned by
+trigger. a grant on an address nobody has signed up on still lists, at the foot
+of the same panel, so a permission cannot go invisible.
+
+"view as" now sits on every row of the list, not only inside a person. it needs
+SUPABASE_SECRET_KEY, which .env.local has and .env does not.
+
+settings: tabs gone, one column. Profile, Appearance (the theme picker, which
+existed and was buried under a tab called Account), Account facts + sign out,
+Leave. the access pill says founder / runs the programme / student / no access
+instead of naming plans this deploy does not sell.
+
+lib/access-levels.ts is the shared three words: lib/founder.ts reads them, the
+action writes them, the picker is a client component and could not import
+either.
+
+app/(dash)/founder/*, components/dash/{access-picker,founder-tabs}.tsx,
+lib/{founder,access-levels}.ts, app/(dash)/settings/page.tsx
+
+2026-08-27 — logos instead of the words, and half the sentences gone
+
+/founder/people/[id] was the worst of it: a whole panel about workspaces, four
+usage tiles carrying three lines of prose each, and every account row spelling
+"TikTok @handle · Instagram @handle" out longhand.
+
+- the Workspaces panel is gone in full, form and all. it listed every org
+  somebody sat on with an address under each and offered to mint them another.
+  there is one workspace on this deploy, the addresses it printed were hosts
+  nothing answers on, and a second org buys its owner nothing because the app
+  is pinned to CE_ORG_ID. what was ever true about it is one word, so it is a
+  pill in the header now: Owner, Admin or Student. the seat read shrank with
+  it, one role instead of a join on orgs.
+- usage: one line under each number instead of three. the three said credits
+  AND calls AND saved profiles, which is the ledger's job. the ledger link in
+  the panel header carries the all-in figure that used to be a sub line.
+- accounts on a deal are marks now, brand coloured, with the handle beside
+  them. paused is drawn rather than spelled: the chip dims instead of trailing
+  " (paused)".
+- a post card gets the platform's mark in the top right corner of its cover
+  rather than its name on a line underneath, and the line under it is views and
+  age, nothing else. `platformLabel()` and `platformCounts()` are deleted;
+  `asPlatform()` narrows the raw string and `PlatformIcon` falls back to the
+  word for anything we have no mark for.
+- both empty states were a paragraph explaining the data model. one line each.
+
+the same swap where else it was doing nothing:
+- dashboard's platform split: the mark alone at 18px. a logo next to its own
+  name spelled out is the name said twice, and four of those is a row of type.
+- deal-forms' handle rows: 112px of label column returned to the input. the
+  placeholder next to it already names the platform.
+- a deal's account row with nothing in it said "TikTok" as its title, under a
+  tiktok mark. it says "not added", which is the thing the row did not say.
+
+every one keeps the name as `title` + `sr-only`, so nothing is lost to a screen
+reader or a hover.
+
+and the sentences nobody was reading
+- /founder/usage had six empty states whose bodies explained how the ledger
+  works to the one person who wrote it. the head already says what is empty, so
+  each body is one short line now.
+- two hints in deal-schema lost their second sentence: the cycle anchor's
+  worked example and the content-group note under view counting, both of which
+  are on the page they matter on already.
+- the editor apply form's portfolio hint, which asked a question and then
+  answered it.
+- "Use a TikTok, Instagram, YouTube or Facebook post link." stays exactly as it
+  is. an error has to name what it will accept, and there is no mark to draw in
+  a sentence.
+
+2026-08-27 — invites & roles, cut down
+
+the page was three cards and four paragraphs for two people. one card was a
+lecture on what a student and an admin are, said again as a hint under the
+picker; the two lists were separate cards drawing a border and a heading each
+for what is usually a single row; and the right column of the roster held
+sentences ("cannot be removed", "owner removes") explaining buttons that were
+not there.
+
+now: one Invite card with just the form (the live role note under the picker is
+the only explanation, and ROLE_NOTE is a line each instead of a paragraph), and
+one "People · N" card holding both halves. Members first, then an "Invited · N"
+strip and the pending rows, dashed avatar ring so an offer of a seat reads apart
+from a seat at a glance. Both halves render through one local Seat component, so
+the role pills sit in one column down the whole card; the actions slot keeps its
+width when empty instead of being captioned.
+
+action notes trimmed the same way ("Invite sent to x.", "Removed.").
+
+app/(dash)/agency/people/page.tsx, lib/org.ts (ROLE_NOTE),
+app/(dash)/agency/actions.ts
+
+2026-08-27 — the invite was a dead address, and the token was the only key
+
+two bugs, one screen. copying an invite gave out
+`http://creator-empire.localhost:3000/join/<token>`, and the person it was sent
+to, signing in normally on the host this app actually serves, was told they were
+not on the roster.
+
+the address
+- lib/org.ts `tenantHost()` had a branch above the TENANT_SUBDOMAINS_LIVE check
+  that turned any localhost request into `<slug>.localhost:<port>`, on the
+  theory that every browser resolves the whole .localhost tld to the loopback
+  so it costs nothing. it costs the sign-in. this deploy does no host lookup at
+  all and the supabase auth cookie is host-only here (cookie-domain.ts never
+  widens on localhost), so the link was a second origin: the login it bounces
+  through writes its pkce verifier there, supabase sends the code back to the
+  site url instead because that subdomain is not on the redirect allow list,
+  and the callback reads for a verifier that was never written on the host it
+  is running on. that is the whole of "that sign-in did not finish in this
+  browser".
+- so: one workspace, one host, in dev as in production. new `originFor(host)`
+  mints on the host that asked, `inviteLink()` uses it, `tenantHost()` falls
+  through to the request host, and `hasOwnHost()` stops claiming localhost is
+  the org's own address. `schemeFor()` is the one place that decides http vs
+  https now, instead of two copies of the same startsWith check.
+
+the key
+- `accept_org_invite(p_token)` was the only path that could seat anybody from a
+  session, and that is not an accident: `authenticated` holds no insert grant on
+  org_members, and the select policy on org_invites needs an owner or admin
+  seat, so an invited person cannot even read the row that names them. all of
+  that is right. what was wrong is that a secret in a url was load bearing.
+- new `public.claim_org_invite()`, migration 20260827020000. no arguments, so
+  there is nothing for a caller to lie about: it takes the email off auth.users
+  for `auth.uid()`, requires it confirmed, finds the newest pending unexpired
+  invite written to it, seats them and stamps accepted_at. security definer for
+  exactly the reason the token version is. execute revoked from anon, which
+  needed saying twice — supabase's default privileges grant it directly, so
+  `revoke from public` does not touch it.
+- called in three places, all through `claimPendingInvite()` in
+  lib/invite-claim.ts, all best effort: the auth callback right after the
+  exchange (the ordinary sign-in), `requireViewer()` on the step before it
+  redirects to /account (the case where the invite is written while they are
+  already signed in — `load()` is cached for that request so the answer is a
+  redirect, and the next request reads the seat), and /account itself, so a
+  reload collects it. the copy there said "sign in again" and now says "reload
+  this page", which is what actually works.
+- the token path is untouched. /join/<token> is still how an emailed link
+  walks, and it still refuses an invite written to a different email.
+
+2026-08-27 — the dropdown is ours now
+
+a native <select> hands its menu to the operating system. on macos that is a
+grey popover with a system-blue row, and it ignores every token in globals.css.
+it was the one control in the product that never matched the rest of it.
+
+components/dash/form.tsx
+- new `Picker`: the listbox pattern. a button, a hidden input so a plain form
+  post still carries the value with no javascript on the server side, and a
+  panel. keyboard is the whole native set: arrows, home/end, enter, escape,
+  tab, and type-to-jump with a 700ms buffer.
+- the panel is `position: fixed` in a portal on <body>, not absolute beside the
+  trigger, because these sit inside cards, folds and scrolling tables that clip
+  their own overflow. fixed has to be re-measured when anything moves, so
+  place() binds scroll on the CAPTURE phase: an inner container scrolling does
+  not bubble, and without capture the panel hangs in mid air beside a trigger
+  that already left. it flips upwards only when there is no room below and more
+  above.
+- focus never leaves the trigger. the active row is announced with
+  aria-activedescendant rather than by moving focus into the list, which is what
+  keeps escape, tab and the form's own submit behaving normally.
+- `Select` is Picker in the Field shell, same props as before, so all eleven
+  call sites are untouched. it is drawn with the same border, radius and padding
+  as Field, so a select and a text field in one grid line up to the pixel.
+
+the raw ones, swapped to Picker
+- agency/people (role), founder-controls (role), application-status (pill),
+  post-queue (time zone), autopost-batch-flow (the small one), payout-history
+  (month, its own chevron deleted), deal-forms (window kind, and the post
+  picker on the manual stats form).
+
+- org-forms: the invite row used to listen for a change event bubbling out of a
+  wrapper div and narrow it with `instanceof HTMLSelectElement`. there is no
+  select any more and a hidden input fires nothing, so that silently stopped
+  updating the role note. it uses Select's own onChange now and the wrapper is
+  gone.
+- app/globals.css: @keyframes pop, opacity only. the panel carries an inline
+  transform when it flips upwards and a keyframe writing transform would fight
+  it for the length of the animation.
+
 2026-08-26 — strip ugc flows out of creator empire
 
 the browser tab said "UGC brand deals in 30 days, or your $500 back". that was

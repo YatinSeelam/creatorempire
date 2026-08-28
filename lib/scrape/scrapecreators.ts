@@ -48,17 +48,22 @@ export type ScFetch =
       endpoint: string;
     };
 
-/** Lets the orchestrator refuse before it builds a request it cannot send. */
-export function hasApiKey(): boolean {
-  return Boolean(process.env.SCRAPECREATORS_API_KEY);
-}
-
+/**
+ * The key is handed in now.
+ *
+ * It used to be read straight off `process.env` here, which is fine while a
+ * deploy has exactly one and impossible once a workspace brings its own: this
+ * file has no idea whose scrape it is running. The caller does — every one of
+ * them resolves it through `lib/api-keys.ts` — so it arrives as an argument
+ * and the env is only the fallback for a caller that has nobody to ask about.
+ */
 async function call(
   endpoint: string,
-  params: Record<string, string | null | undefined>
+  params: Record<string, string | null | undefined>,
+  apiKey?: string | null
 ): Promise<ScFetch> {
   const started = Date.now();
-  const key = process.env.SCRAPECREATORS_API_KEY;
+  const key = apiKey?.trim() || process.env.SCRAPECREATORS_API_KEY;
   if (!key) {
     return { ok: false, status: null, error: "missing api key", durationMs: 0, endpoint };
   }
@@ -108,12 +113,13 @@ async function call(
 export function fetchTiktokVideos(args: {
   handle: string;
   cursor?: string | null;
+  key?: string | null;
 }): Promise<ScFetch> {
-  return call(SC_ENDPOINT.tiktok, {
-    handle: args.handle,
-    trim: "true",
-    max_cursor: args.cursor,
-  });
+  return call(
+    SC_ENDPOINT.tiktok,
+    { handle: args.handle, trim: "true", max_cursor: args.cursor },
+    args.key
+  );
 }
 
 /**
@@ -124,24 +130,25 @@ export function fetchTiktokVideos(args: {
  * only calls in the app that exist to fetch media rather than numbers. One
  * credit each, same ledger.
  */
-export function fetchTiktokPost(url: string): Promise<ScFetch> {
-  return call(SC_ENDPOINT.tiktokPost, { url });
+export function fetchTiktokPost(url: string, key?: string | null): Promise<ScFetch> {
+  return call(SC_ENDPOINT.tiktokPost, { url }, key);
 }
 
-export function fetchInstagramPost(url: string): Promise<ScFetch> {
-  return call(SC_ENDPOINT.instagramPost, { url });
+export function fetchInstagramPost(url: string, key?: string | null): Promise<ScFetch> {
+  return call(SC_ENDPOINT.instagramPost, { url }, key);
 }
 
 /** One page of an instagram account's reels. `cursor` is the previous `max_id`. */
 export function fetchInstagramReels(args: {
   handle: string;
   cursor?: string | null;
+  key?: string | null;
 }): Promise<ScFetch> {
-  return call(SC_ENDPOINT.instagram, {
-    handle: args.handle,
-    trim: "true",
-    max_id: args.cursor,
-  });
+  return call(
+    SC_ENDPOINT.instagram,
+    { handle: args.handle, trim: "true", max_id: args.cursor },
+    args.key
+  );
 }
 
 /**
@@ -159,15 +166,16 @@ export function fetchInstagramReels(args: {
 export function fetchFacebookReels(args: {
   pageUrl: string;
   cursor?: string | null;
+  key?: string | null;
 }): Promise<ScFetch> {
   const raw = args.cursor ?? "";
   const sep = raw.indexOf("|");
   const [nextPageId, cursor] = sep === -1 ? [raw, ""] : [raw.slice(0, sep), raw.slice(sep + 1)];
-  return call(SC_ENDPOINT.facebook, {
-    url: args.pageUrl,
-    next_page_id: nextPageId || null,
-    cursor: cursor || null,
-  });
+  return call(
+    SC_ENDPOINT.facebook,
+    { url: args.pageUrl, next_page_id: nextPageId || null, cursor: cursor || null },
+    args.key
+  );
 }
 
 /** One facebook reel by its url, for the portfolio importer.
@@ -176,8 +184,8 @@ export function fetchFacebookReels(args: {
  *  documents `view_count` here as sometimes null and sometimes lower than the
  *  public reels badge. The badge number is on the profile reels endpoint, and
  *  under-counting a view is under-paying a bonus. */
-export function fetchFacebookPost(url: string): Promise<ScFetch> {
-  return call(SC_ENDPOINT.facebookPost, { url });
+export function fetchFacebookPost(url: string, key?: string | null): Promise<ScFetch> {
+  return call(SC_ENDPOINT.facebookPost, { url }, key);
 }
 
 /**
@@ -190,15 +198,16 @@ export function fetchYoutubeShorts(args: {
   handle: string;
   channelId?: string | null;
   cursor?: string | null;
+  key?: string | null;
 }): Promise<ScFetch> {
   // a UC id is not accepted in `handle`, so the two are mutually exclusive.
   const target = args.channelId
     ? { channelId: args.channelId }
     : { handle: args.handle };
 
-  return call(SC_ENDPOINT.youtube, {
-    ...target,
-    sort: "newest",
-    continuationToken: args.cursor,
-  });
+  return call(
+    SC_ENDPOINT.youtube,
+    { ...target, sort: "newest", continuationToken: args.cursor },
+    args.key
+  );
 }

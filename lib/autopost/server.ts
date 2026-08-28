@@ -26,6 +26,7 @@ import {
   type JobStatus,
   type PublishResult,
 } from "@/lib/autopost/upload-post";
+import { apiKey, hasApiKey } from "@/lib/api-keys";
 import { emailForUser, notificationHtml, sendEmail } from "@/lib/email/send";
 import { parseHandle } from "@/lib/ingest/urls";
 import { onBooks, type DealScope } from "@/lib/workspace";
@@ -99,7 +100,7 @@ export async function ensureProfile(
   if (existing) return existing as SocialProfile;
 
   const username = usernameFor(userId, dealId);
-  await createManagedProfile(username);
+  await createManagedProfile(username, await apiKey("upload_post", userId));
 
   const { data, error } = await db
     .from("social_profiles")
@@ -146,7 +147,8 @@ export async function connectUrl(
   const site = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
   return whiteLabelLink(
     profile.upload_post_username,
-    `${site}${connectReturnPath(origin, dealId)}`
+    `${site}${connectReturnPath(origin, dealId)}`,
+    await apiKey("upload_post", userId)
   );
 }
 
@@ -162,7 +164,11 @@ export async function refreshProfile(
   db: SupabaseClient,
   profile: SocialProfile
 ): Promise<{ profile: SocialProfile; facebookPages: FacebookPage[] }> {
-  const upstream = await getProfile(profile.upload_post_username).catch(() => null);
+  // the workspace's own upload-post account when it has one, the deploy's
+  // otherwise. the profile row carries whose it is, so nothing had to change
+  // about how this is called.
+  const key = await apiKey("upload_post", profile.user_id);
+  const upstream = await getProfile(profile.upload_post_username, key).catch(() => null);
   if (!upstream) return { profile, facebookPages: [] };
 
   const connected = connectedOf(upstream);
@@ -177,7 +183,7 @@ export async function refreshProfile(
   if (!connected.facebook) {
     facebookPageId = null;
   } else if (!facebookPageId) {
-    facebookPages = await listFacebookPages(profile.upload_post_username).catch(() => []);
+    facebookPages = await listFacebookPages(profile.upload_post_username, key).catch(() => []);
     facebookPageId = facebookPages.length === 1 ? facebookPages[0].id : null;
   }
 
@@ -277,7 +283,8 @@ export type Connections = {
   /** platform → handle, as Upload-Post last reported it. */
   connected: Record<string, string>;
   lastCheckedAt: string | null;
-  /** false when UPLOAD_POST_API_KEY is unset: connecting is off, not broken. */
+  /** false when this creator has no upload-post key to reach, the workspace's
+   *  or the deploy's: connecting is off, not broken. */
   configured: boolean;
 };
 
@@ -295,7 +302,7 @@ export async function loadConnections(
   userId: string,
   dealId: string
 ): Promise<Connections> {
-  const configured = Boolean(process.env.UPLOAD_POST_API_KEY);
+  const configured = await hasApiKey("upload_post", userId);
 
   const { data } = await db
     .from("social_profiles")
@@ -478,7 +485,10 @@ export async function reconcilePosts(
       continue;
     }
 
-    const status = await getJobStatus(ref).catch(() => null);
+    const status = await getJobStatus(
+      ref,
+      await apiKey("upload_post", post.user_id)
+    ).catch(() => null);
     const patch = status ? patchFor(post, status) : null;
 
     if (!patch) {
@@ -582,7 +592,7 @@ export async function loadAutopost(
   userId: string,
   dealId: string
 ): Promise<AutopostData> {
-  const configured = Boolean(process.env.UPLOAD_POST_API_KEY);
+  const configured = await hasApiKey("upload_post", userId);
 
   const [{ data: profileRow }, { data: postRows }] = await Promise.all([
     db

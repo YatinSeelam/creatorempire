@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * The drawings an editor sees when a list has nothing in it yet.
@@ -39,7 +40,9 @@ function Art({
 }) {
   return (
     <Image
-      src={src}
+      // basePath by hand, once, for all three drawings: next/image prefixes
+      // the optimiser endpoint but never `src`. see lib/base-path.ts
+      src={`${BASE_PATH}${src}`}
       alt={alt}
       width={width}
       height={height}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { syncStripeAccount } from "@/app/editors/actions";
 import { createClient } from "@/lib/supabase/server";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * Where stripe sends an editor back after onboarding.
@@ -24,7 +25,9 @@ export async function GET(request: Request) {
   // back to the payouts page, not the desk: the connect panel they pressed the
   // button on lives there now, and landing on the desk hides the one thing they
   // came back to check.
-  const home = new URL("/editors/payouts", request.url);
+  // BASE_PATH because an absolute second argument wipes the prefix `request.url`
+  // came in with, and stripe sends people back through the public host.
+  const home = new URL(`${BASE_PATH}/editors/payouts`, request.url);
 
   const supabase = await createClient();
   const {
@@ -33,7 +36,7 @@ export async function GET(request: Request) {
 
   if (!user) {
     return NextResponse.redirect(
-      new URL("/login?next=/editors/payouts", request.url)
+      new URL(`${BASE_PATH}/login?next=/editors/payouts`, request.url)
     );
   }
 

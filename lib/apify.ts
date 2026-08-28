@@ -78,10 +78,11 @@ export type ApifyRun =
  */
 export async function runActor(
   platform: ImportPlatform | "youtube",
-  url: string
+  url: string,
+  token?: string | null
 ): Promise<ApifyRun> {
   const actor = ACTORS[platform];
-  return callActor(actor.id, actor.input(url));
+  return callActor(actor.id, actor.input(url), token);
 }
 
 /**
@@ -89,8 +90,13 @@ export async function runActor(
  * entry point; the transcriber calls this directly with its own actors, so the
  * auth, timeout and error shape live once.
  */
-export async function callActor(actorId: string, input: unknown): Promise<ApifyRun> {
-  const token = apifyToken();
+export async function callActor(
+  actorId: string,
+  input: unknown,
+  apiToken?: string | null
+): Promise<ApifyRun> {
+  // handed in by a caller that knows whose workspace this is, env otherwise.
+  const token = apiToken?.trim() || apifyToken();
   if (!token) return { ok: false, error: "apify not configured", status: null };
 
   const endpoint = `${BASE}/${actorId}/run-sync-get-dataset-items?timeout=115`;

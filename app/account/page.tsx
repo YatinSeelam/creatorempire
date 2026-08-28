@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AccountNav } from "@/components/account-nav";
 import { isEntitled, loadAccess } from "@/lib/access";
+import { claimPendingInvite } from "@/lib/invite-claim";
 import { CE_ORG_ID } from "@/lib/org";
+import { BASE_PATH } from "@/lib/base-path";
 
 export const metadata: Metadata = {
   title: "Your account · Creator Empire",
@@ -25,6 +27,11 @@ export default async function AccountPage() {
   const access = await loadAccess();
   if (!access) redirect("/login?next=/dashboard");
   if (isEntitled(access)) redirect("/dashboard");
+
+  // somebody parked on this page while an admin added them. a reload is the
+  // obvious thing to try, so a reload is what collects the seat, rather than
+  // the sign out and back in the copy below used to ask for.
+  if (await claimPendingInvite(access.supabase)) redirect("/dashboard");
 
   const email = access.user.email ?? "";
   const unsure = access.readFailed;
@@ -54,19 +61,19 @@ export default async function AccountPage() {
                 ? "a read failed on our side. try again in a moment, nothing about your account changed."
                 : unconfigured
                   ? "set NEXT_PUBLIC_CE_ORG_ID to the creator empire org id and redeploy. only a founder gets in until then."
-                  : "ask your creator empire admin to add this google email to the programme. once they do, sign in again and the dashboard opens."}
+                  : "ask your creator empire admin to add this google email to the programme. once they do, reload this page and the dashboard opens."}
             </p>
 
             <div className="mt-7 flex flex-wrap gap-3">
               {unsure && (
                 <a
-                  href="/dashboard"
+                  href={`${BASE_PATH}/dashboard`}
                   className="inline-flex h-[44px] items-center rounded-pill bg-flame px-6 text-[14px] font-semibold text-on-accent hover:bg-flame-dark"
                 >
                   try again
                 </a>
               )}
-              <form action="/auth/sign-out" method="post">
+              <form action={`${BASE_PATH}/auth/sign-out`} method="post">
                 <button
                   type="submit"
                   className="inline-flex h-[44px] items-center rounded-pill border border-line px-6 text-[14px] font-semibold hover:bg-shell"

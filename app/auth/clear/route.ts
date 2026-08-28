@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { safeNext } from "@/lib/safe-next";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * Recovery endpoint: nukes every Supabase auth cookie on each plausible
@@ -18,7 +19,10 @@ export async function GET(req: NextRequest) {
   // Only same-origin paths. Otherwise a crafted recovery link with
   // `next=https://evil.com` would bounce the browser off-site.
   const next = safeNext(nextRaw, "/login");
-  const res = NextResponse.redirect(new URL(next, url.origin));
+  // safeNext hands back an app path with no prefix on it, and `url.origin` has
+  // none either, so the base path goes on by hand or the recovery link bounces
+  // to a page the rewrite does not serve.
+  const res = NextResponse.redirect(new URL(`${BASE_PATH}${next}`, url.origin));
 
   const host = (req.headers.get("host") || "").split(":")[0].toLowerCase();
   const apex = host.startsWith("app.") ? host.slice(4) : host;

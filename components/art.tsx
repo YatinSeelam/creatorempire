@@ -6,6 +6,7 @@
 // `currentColor` and sit on the text baseline, which a png cannot do.
 
 import Image from "next/image";
+import { BASE_PATH } from "@/lib/base-path";
 
 type ArtProps = { className?: string };
 
@@ -128,7 +129,8 @@ export function Glyph({
 export function Mark({ className = "size-8" }: ArtProps) {
   return (
     <Image
-      src="/logo-mark.png"
+      // basePath by hand: next/image leaves `src` alone. see lib/base-path.ts
+      src={`${BASE_PATH}/logo-mark.png`}
       alt="creator empire"
       width={512}
       height={512}

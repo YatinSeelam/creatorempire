@@ -21,6 +21,7 @@
  * for a creator who has connected their own account, and both are free.
  */
 
+import { apiKey, hasApiKey, type KeyProvider } from "@/lib/api-keys";
 import { profileUrl, type Platform } from "@/lib/deals";
 import { getJson, pickArray, pickNumber, pickString, Spacer, withRetry } from "./http";
 import { parsePostUrl } from "./urls";
@@ -29,7 +30,6 @@ import {
   fetchInstagramReels,
   fetchTiktokVideos,
   fetchYoutubeShorts,
-  hasApiKey as hasScrapeKey,
 } from "@/lib/scrape/scrapecreators";
 import {
   normalizeFacebook,
@@ -96,8 +96,10 @@ export type FetchOptions = {
 
 export class ProviderUnavailable extends Error {}
 
-const RAPID_KEY = () => process.env.RAPIDAPI_KEY ?? "";
-const YT_KEY = () => process.env.YOUTUBE_API_KEY ?? "";
+// The keys used to be read here, at module scope. They are resolved per call
+// now, from `lib/api-keys.ts`: the workspace's own key if it has pasted one,
+// the deploy's env var otherwise. `opts.userId` is what says whose workspace,
+// and it was already threaded to every one of these for the ledger.
 
 // Instagram's host throttles hardest, so it gets the widest gap.
 const igSpacer = new Spacer(1_150);
@@ -131,8 +133,8 @@ const YT = "https://www.googleapis.com/youtube/v3";
  * never becomes the thing that costs money.
  */
 async function fetchYouTube(handle: string, opts: FetchOptions): Promise<AccountFeed> {
-  const key = YT_KEY();
-  if (!key) throw new ProviderUnavailable("YOUTUBE_API_KEY is not set");
+  const key = await apiKey("youtube", opts.userId ?? null);
+  if (!key) throw new ProviderUnavailable("no youtube key");
 
   let calls = 0;
   let channelId = opts.accountId?.startsWith("UC") ? opts.accountId : null;
@@ -238,8 +240,8 @@ async function fetchYouTube(handle: string, opts: FetchOptions): Promise<Account
 
 const TT_HOST = "tiktok-api23.p.rapidapi.com";
 
-function rapidHeaders(host: string): Record<string, string> {
-  return { "x-rapidapi-key": RAPID_KEY(), "x-rapidapi-host": host };
+function rapidHeaders(host: string, key: string): Record<string, string> {
+  return { "x-rapidapi-key": key, "x-rapidapi-host": host };
 }
 
 /**
@@ -247,7 +249,8 @@ function rapidHeaders(host: string): Record<string, string> {
  * the lookup is a whole request and a handle rarely changes.
  */
 async function fetchTikTok(handle: string, opts: FetchOptions): Promise<AccountFeed> {
-  if (!RAPID_KEY()) throw new ProviderUnavailable("RAPIDAPI_KEY is not set");
+  const key = await apiKey("rapidapi", opts.userId ?? null);
+  if (!key) throw new ProviderUnavailable("no rapidapi key");
 
   let calls = 0;
   let secUid = opts.accountId ?? null;
@@ -258,7 +261,7 @@ async function fetchTikTok(handle: string, opts: FetchOptions): Promise<AccountF
     const res = await withRetry(() =>
       getJson<Json>(
         `https://${TT_HOST}/api/user/info?uniqueId=${encodeURIComponent(handle)}`,
-        rapidHeaders(TT_HOST)
+        rapidHeaders(TT_HOST, key)
       )
     );
     secUid = pickString(res, [
@@ -281,7 +284,7 @@ async function fetchTikTok(handle: string, opts: FetchOptions): Promise<AccountF
     const res = await withRetry(() =>
       getJson<Json>(
         `https://${TT_HOST}/api/user/posts?secUid=${encodeURIComponent(secUid)}&count=35&cursor=${cursor}`,
-        rapidHeaders(TT_HOST)
+        rapidHeaders(TT_HOST, key)
       )
     );
 
@@ -335,7 +338,8 @@ const IG_HOST = "instagram-api-fast-reliable-data-scraper.p.rapidapi.com";
  * the `views` metric that public pages do not reliably expose at all.
  */
 async function fetchInstagram(handle: string, opts: FetchOptions): Promise<AccountFeed> {
-  if (!RAPID_KEY()) throw new ProviderUnavailable("RAPIDAPI_KEY is not set");
+  const key = await apiKey("rapidapi", opts.userId ?? null);
+  if (!key) throw new ProviderUnavailable("no rapidapi key");
 
   let calls = 0;
   let pk = opts.accountId ?? null;
@@ -346,7 +350,7 @@ async function fetchInstagram(handle: string, opts: FetchOptions): Promise<Accou
     const res = await withRetry(() =>
       getJson<Json>(
         `https://${IG_HOST}/profile?username=${encodeURIComponent(handle)}`,
-        rapidHeaders(IG_HOST)
+        rapidHeaders(IG_HOST, key)
       )
     );
     pk = pickString(res, ["pk", "id", "user.pk", "data.user.pk", "data.pk", "user.id"]);
@@ -364,7 +368,7 @@ async function fetchInstagram(handle: string, opts: FetchOptions): Promise<Accou
     const res = await withRetry(() =>
       getJson<Json>(
         `https://${IG_HOST}/reels?user_id=${encodeURIComponent(pk)}${maxId ? `&max_id=${encodeURIComponent(maxId)}` : ""}`,
-        rapidHeaders(IG_HOST)
+        rapidHeaders(IG_HOST, key)
       )
     );
 
@@ -463,12 +467,17 @@ async function fetchScrapeCreators(
   handle: string,
   opts: FetchOptions
 ): Promise<AccountFeed> {
-  if (!hasScrapeKey()) throw new ProviderUnavailable("SCRAPECREATORS_API_KEY is not set");
-
   const userId = opts.userId ?? null;
   if (!userId) throw new ProviderUnavailable("no account owner to bill the scrape to");
+
+  const scKey = await apiKey("scrapecreators", userId);
+  if (!scKey) throw new ProviderUnavailable("no scrapecreators key");
   if (!createServiceClient()) {
-    throw new ProviderUnavailable("usage logging is not set up, so scraping is switched off");
+    // a fragment, like every other message here: `sync.ts` completes it with
+    // ", so this platform cannot be pulled yet". this one carried its own "so"
+    // clause as well, which composed into three of them in a row on the
+    // account row where it is read.
+    throw new ProviderUnavailable("usage logging is not set up");
   }
 
   const source = opts.source ?? "sync";
@@ -507,12 +516,16 @@ async function fetchScrapeCreators(
   for (let page = 0; page < maxPages; page += 1) {
     const result =
       platform === "tiktok"
-        ? await fetchTiktokVideos({ handle, cursor })
+        ? await fetchTiktokVideos({ handle, cursor, key: scKey })
         : platform === "instagram"
-          ? await fetchInstagramReels({ handle, cursor })
+          ? await fetchInstagramReels({ handle, cursor, key: scKey })
           : platform === "facebook"
-            ? await fetchFacebookReels({ pageUrl: profileUrl("facebook", handle), cursor })
-            : await fetchYoutubeShorts({ handle, channelId, cursor });
+            ? await fetchFacebookReels({
+                pageUrl: profileUrl("facebook", handle),
+                cursor,
+                key: scKey,
+              })
+            : await fetchYoutubeShorts({ handle, channelId, cursor, key: scKey });
 
     calls += 1;
 
@@ -627,49 +640,70 @@ type Json = unknown;
  * fails is the answer: the error propagates instead of falling through, because
  * retrying the same read against a second provider bills twice for one number.
  */
-const CHAIN: Record<Platform, { key: () => boolean; fetch: Fetcher }[]> = {
+const CHAIN: Record<Platform, { key: KeyProvider; fetch: Fetcher }[]> = {
   youtube: [
-    { key: () => Boolean(YT_KEY()), fetch: fetchYouTube },
-    { key: hasScrapeKey, fetch: (h, o) => fetchScrapeCreators("youtube", h, o) },
+    { key: "youtube", fetch: fetchYouTube },
+    { key: "scrapecreators", fetch: (h, o) => fetchScrapeCreators("youtube", h, o) },
   ],
   tiktok: [
-    { key: () => Boolean(RAPID_KEY()), fetch: fetchTikTok },
-    { key: hasScrapeKey, fetch: (h, o) => fetchScrapeCreators("tiktok", h, o) },
+    { key: "rapidapi", fetch: fetchTikTok },
+    { key: "scrapecreators", fetch: (h, o) => fetchScrapeCreators("tiktok", h, o) },
   ],
   instagram: [
-    { key: () => Boolean(RAPID_KEY()), fetch: fetchInstagram },
-    { key: hasScrapeKey, fetch: (h, o) => fetchScrapeCreators("instagram", h, o) },
+    { key: "rapidapi", fetch: fetchInstagram },
+    { key: "scrapecreators", fetch: (h, o) => fetchScrapeCreators("instagram", h, o) },
   ],
   facebook: [
     // one rung, not two: rapidapi is not subscribed for facebook. the sister
     // project's `facebook-scraper3` client is the flat-rate rung that goes in
     // front of this one if that ever changes, exactly where rapidapi already
     // sits for tiktok and instagram.
-    { key: hasScrapeKey, fetch: (h, o) => fetchScrapeCreators("facebook", h, o) },
+    { key: "scrapecreators", fetch: (h, o) => fetchScrapeCreators("facebook", h, o) },
   ],
 };
 
 type Fetcher = (handle: string, opts: FetchOptions) => Promise<AccountFeed>;
 
-export function fetchAccountFeed(
+/**
+ * The chain names a key rather than testing one.
+ *
+ * It used to hold a `() => boolean` reading `process.env` directly, which is
+ * why it could only ever answer for the deploy. A key now belongs to a
+ * workspace, so "is this rung available" is a question about a person and has
+ * to be asked, not evaluated — which is the whole reason this function became
+ * async. `apiKey` is memoised for the request, so a sweep over twenty accounts
+ * of the same creator asks the database once.
+ */
+export async function fetchAccountFeed(
   platform: Platform,
   handle: string,
   opts: FetchOptions
 ): Promise<AccountFeed> {
-  const pick = CHAIN[platform].find((p) => p.key());
-  if (!pick) {
-    throw new ProviderUnavailable(
-      `no ${platform} key is set (SCRAPECREATORS_API_KEY covers every platform here)`
-    );
+  const userId = opts.userId ?? null;
+
+  for (const rung of CHAIN[platform]) {
+    if (await hasApiKey(rung.key, userId)) return rung.fetch(handle, opts);
   }
-  return pick.fetch(handle, opts);
+
+  throw new ProviderUnavailable(
+    `no ${platform} key is set (a scrapecreators key covers every platform here)`
+  );
 }
 
 /** Which platforms can actually be pulled with the keys this deploy has. */
-export function availablePlatforms(): Record<Platform, boolean> {
+export async function availablePlatforms(
+  userId: string | null
+): Promise<Record<Platform, boolean>> {
   const out = {} as Record<Platform, boolean>;
   for (const platform of Object.keys(CHAIN) as Platform[]) {
-    out[platform] = CHAIN[platform].some((p) => p.key());
+    let any = false;
+    for (const rung of CHAIN[platform]) {
+      if (await hasApiKey(rung.key, userId)) {
+        any = true;
+        break;
+      }
+    }
+    out[platform] = any;
   }
   return out;
 }

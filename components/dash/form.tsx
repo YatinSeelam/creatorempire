@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
-import { useFormStatus } from "react-dom";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from "react";
+import { createPortal, useFormStatus } from "react-dom";
 
 /**
  * The form primitives, lifted out of settings-controls so every form in the app
@@ -101,11 +109,287 @@ export function Field({
   );
 }
 
+/* -------------------------------------------------------------- the picker */
+
+function Chev({ open, className = "size-4" }: { open?: boolean; className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      aria-hidden
+      className={`shrink-0 text-ink-50 transition-transform duration-150 ${open ? "rotate-180" : ""} ${className}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m6 8 4 4 4-4" />
+    </svg>
+  );
+}
+
+/**
+ * The dropdown, drawn by us.
+ *
+ * A native `<select>` hands its menu to the operating system, and on macOS that
+ * is a grey popover with a system-blue row that ignores every token in
+ * globals.css. It was the one control in the product that never matched the
+ * rest of it. This is the listbox pattern instead: a button, a hidden input so
+ * a plain form post still carries the value with no javascript on the server
+ * side of it, and a panel.
+ *
+ * The panel is `position: fixed` inside a portal on `<body>`, not absolute
+ * beside the trigger, because these sit inside cards, folds and scrolling
+ * tables that clip their own overflow. Fixed means it has to be re-measured
+ * when anything moves, so `place()` is bound on the capture phase: a scrolling
+ * inner container does not bubble its scroll, and without capture the panel
+ * would hang in mid air beside a trigger that had left.
+ *
+ * Focus never leaves the trigger. The active row is announced with
+ * `aria-activedescendant` rather than by moving focus into the list, which is
+ * what keeps Escape, Tab and the form's own submit behaving normally.
+ */
+export function Picker({
+  options,
+  value,
+  defaultValue,
+  onChange,
+  name,
+  placeholder = "",
+  disabled = false,
+  ariaLabel,
+  labelId,
+  triggerClass,
+  chevronClass,
+  minPanelWidth = 168,
+}: {
+  options: readonly { value: string; label: string }[];
+  /** hand a `value` in and it is controlled; leave it out and it keeps its own. */
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  /** when set, a hidden input posts under this name. */
+  name?: string;
+  placeholder?: string;
+  disabled?: boolean;
+  ariaLabel?: string;
+  labelId?: string;
+  /** replaces the default trigger look entirely, for the pill and inline ones. */
+  triggerClass?: string;
+  chevronClass?: string;
+  minPanelWidth?: number;
+}) {
+  const id = useId();
+  const [inner, setInner] = useState(defaultValue ?? options[0]?.value ?? "");
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [box, setBox] = useState<{ left: number; top: number; width: number; up: boolean } | null>(
+    null,
+  );
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const typed = useRef({ q: "", at: 0 });
+
+  const val = value ?? inner;
+  const current = options.find((o) => o.value === val) ?? null;
+  const at = () => {
+    const i = options.findIndex((o) => o.value === val);
+    return i < 0 ? 0 : i;
+  };
+
+  const place = useCallback(() => {
+    const el = trigger.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const below = window.innerHeight - r.bottom;
+    // flip up only when there is genuinely no room below and more above, so a
+    // dropdown near the fold does not open off the bottom of the window.
+    const up = below < 232 && r.top > below;
+    setBox({ left: r.left, top: up ? r.top - 6 : r.bottom + 6, width: r.width, up });
+  }, []);
+
+  const pick = (v: string) => {
+    if (v !== val) {
+      if (value === undefined) setInner(v);
+      onChange?.(v);
+    }
+    setOpen(false);
+    trigger.current?.focus();
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const away = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!trigger.current?.contains(t) && !panel.current?.contains(t)) setOpen(false);
+    };
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    document.addEventListener("mousedown", away);
+    return () => {
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+      document.removeEventListener("mousedown", away);
+    };
+  }, [open, place]);
+
+  // keep the highlighted row in view while arrowing down a long list.
+  useEffect(() => {
+    if (!open) return;
+    panel.current?.querySelector(`[data-i="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [open, active]);
+
+  const onKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    const last = options.length - 1;
+    if (last < 0) return;
+
+    if (!open) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        setActive(at());
+        setOpen(true);
+      }
+      return;
+    }
+
+    if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+      return;
+    }
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      pick(options[active].value);
+      return;
+    }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActive((a) => Math.min(last, a + 1));
+      return;
+    }
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((a) => Math.max(0, a - 1));
+      return;
+    }
+    if (e.key === "Home") {
+      e.preventDefault();
+      setActive(0);
+      return;
+    }
+    if (e.key === "End") {
+      e.preventDefault();
+      setActive(last);
+      return;
+    }
+    if (e.key === "Tab") {
+      setOpen(false);
+      return;
+    }
+    // type-to-jump, the one thing a native select does that people miss.
+    if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const now = Date.now();
+      const q = (now - typed.current.at < 700 ? typed.current.q : "") + e.key.toLowerCase();
+      typed.current = { q, at: now };
+      const i = options.findIndex((o) => o.label.toLowerCase().startsWith(q));
+      if (i >= 0) setActive(i);
+    }
+  };
+
+  return (
+    <>
+      {name && <input type="hidden" name={name} value={val} />}
+      <button
+        ref={trigger}
+        type="button"
+        role="combobox"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        aria-labelledby={labelId}
+        aria-controls={open ? `${id}-list` : undefined}
+        aria-activedescendant={open ? `${id}-o${active}` : undefined}
+        onClick={() => {
+          setActive(at());
+          setOpen((v) => !v);
+        }}
+        onKeyDown={onKey}
+        className={
+          triggerClass ??
+          `${control} flex cursor-pointer items-center justify-between gap-2 text-left disabled:cursor-default disabled:opacity-60`
+        }
+      >
+        <span className={`truncate ${current ? "" : "font-normal text-ink-50/70"}`}>
+          {current?.label ?? placeholder}
+        </span>
+        <Chev open={open} className={chevronClass} />
+      </button>
+
+      {open &&
+        box &&
+        createPortal(
+          <div
+            ref={panel}
+            id={`${id}-list`}
+            role="listbox"
+            aria-label={ariaLabel}
+            style={{
+              position: "fixed",
+              left: box.left,
+              top: box.top,
+              minWidth: Math.max(box.width, minPanelWidth),
+              transform: box.up ? "translateY(-100%)" : undefined,
+              transformOrigin: box.up ? "bottom" : "top",
+              zIndex: 80,
+            }}
+            className="max-h-60 animate-[pop_120ms_ease-out] overflow-y-auto overscroll-contain rounded-md border border-line bg-paper py-1 shadow-[0_18px_44px_rgba(0,0,0,0.16)]"
+          >
+            {options.map((o, i) => (
+              <button
+                key={o.value}
+                data-i={i}
+                id={`${id}-o${i}`}
+                type="button"
+                role="option"
+                aria-selected={o.value === val}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(o.value)}
+                className={`flex w-full items-center justify-between gap-3 px-3.5 py-2 text-left text-[14px] ${
+                  i === active ? "bg-ember" : ""
+                } ${o.value === val ? "font-bold text-flame-dark" : "font-medium text-ink-70"}`}
+              >
+                <span className="truncate">{o.label}</span>
+                {o.value === val && (
+                  <svg
+                    viewBox="0 0 20 20"
+                    aria-hidden
+                    className="size-3.5 shrink-0 text-flame"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m4 10.5 4 4 8-9" />
+                  </svg>
+                )}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
+    </>
+  );
+}
+
 export function Select({
   label,
   name,
   options,
   defaultValue,
+  value,
   onChange,
   hint,
   className = "",
@@ -114,28 +398,30 @@ export function Select({
   name: string;
   options: readonly { value: string; label: string }[];
   defaultValue?: string;
-  /** for a caller that has to draw something else differently, not for state.
-   *  the select stays uncontrolled either way. */
+  /** as on Field: hand a value in and it becomes controlled. */
+  value?: string;
   onChange?: (value: string) => void;
   hint?: string;
   className?: string;
 }) {
+  const id = useId();
+
   return (
     <div className={className}>
-      <Label>{label}</Label>
+      <span id={id}>
+        <Label>{label}</Label>
+      </span>
+      {/* the shell is the same one Field draws, so a select and a text field
+          sitting side by side in a grid line up to the pixel. */}
       <div className={shell}>
-        <select
+        <Picker
           name={name}
+          labelId={id}
+          options={options}
+          value={value}
           defaultValue={defaultValue}
-          onChange={onChange ? (e) => onChange(e.target.value) : undefined}
-          className={`${control} cursor-pointer`}
-        >
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          onChange={onChange}
+        />
       </div>
       {hint && <p className="mt-1 text-[12.5px] text-ink-50">{hint}</p>}
     </div>

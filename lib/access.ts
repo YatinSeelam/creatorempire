@@ -2,6 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { getBilling } from "@/lib/billing";
+import { claimPendingInvite } from "@/lib/invite-claim";
 import { createClient } from "@/lib/supabase/server";
 import { CE_ORG_ID, type OrgRole } from "@/lib/org";
 
@@ -173,6 +174,18 @@ export async function requireViewer(next = "/dashboard"): Promise<Access> {
     if (access.readFailed) {
       throw new Error("ACCESS_UNREADABLE");
     }
+
+    // last stop before the door shuts: an invite written to this email seats
+    // them here and now. this is the case where the programme adds somebody
+    // who is ALREADY signed in — the callback ran before the invite existed,
+    // so without this they would have to sign out and back in to collect a
+    // seat that is already theirs. `load()` is cached for this request and
+    // would keep saying no, so the answer is a redirect: the next request
+    // reads the seat that now exists.
+    if (await claimPendingInvite(access.supabase)) {
+      redirect(next);
+    }
+
     redirect("/account?denied=1");
   }
 

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { brand } from "@/lib/content";
 import type { Viewer } from "@/lib/viewer";
 import { Avatar } from "./avatar";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * The account row at the foot of the rail, and the menu it opens.
@@ -114,7 +115,7 @@ export function AccountMenu({
 
           {/* a form, not a link. signing out is a state change, and a GET that
               changes state gets fired by every link prefetcher there is. */}
-          <form action="/auth/sign-out" method="post" className="mt-1.5 border-t border-line pt-1.5">
+          <form action={`${BASE_PATH}/auth/sign-out`} method="post" className="mt-1.5 border-t border-line pt-1.5">
             <button type="submit" role="menuitem" className={`${ITEM} w-full`}>
               <SignOut />
               Sign out

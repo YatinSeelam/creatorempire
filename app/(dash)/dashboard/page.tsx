@@ -234,9 +234,12 @@ export default async function DashboardPage({
                 const share = totalAccounts ? n / totalAccounts : 0;
                 return (
                   <div key={p} className="border-l-2 pl-3" style={{ borderColor: platformColor[p] }}>
-                    <div className="flex items-center gap-1.5 text-[12px] font-semibold">
-                      <PlatformGlyph platform={p} className="size-[14px]" tone="brand" />
-                      {PLATFORM_LABEL[p]}
+                    {/* the mark alone. a logo next to its own name spelled out
+                        is the name said twice, and four of those is a row of
+                        type where a row of marks reads in one glance. */}
+                    <div className="flex items-center" title={PLATFORM_LABEL[p]}>
+                      <PlatformGlyph platform={p} className="size-[18px]" tone="brand" />
+                      <span className="sr-only">{PLATFORM_LABEL[p]}</span>
                     </div>
                     <p className="mt-1.5 text-[22px] font-extrabold leading-none tracking-[-0.03em] tabular-nums">
                       {Math.round(share * 100)}%

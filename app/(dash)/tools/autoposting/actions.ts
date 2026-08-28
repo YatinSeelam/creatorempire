@@ -1,5 +1,6 @@
 "use server";
 
+import { apiKey } from "@/lib/api-keys";
 import { revalidatePath } from "next/cache";
 import { MAX_CAPTION } from "@/lib/autopost/limits";
 import {
@@ -34,8 +35,31 @@ async function authed() {
   return { supabase, user };
 }
 
-/** Under this lead upstream rejects the schedule anyway. */
-const MIN_LEAD_MS = 5 * 60_000;
+/**
+ * How soon a post may go out.
+ *
+ * This was a flat five minutes, on the reasoning that upstream rejects a
+ * shorter lead anyway. Upload-Post owns the schedule — nothing in this app
+ * fires a post — so what it will accept as a SCHEDULE is theirs to say, but
+ * "publish this now" is a different call entirely: leave `scheduled_date` off
+ * the payload and it goes immediately. That is the honest answer to "post it
+ * now", and it is why the floor could come down.
+ *
+ * So there are three windows rather than one lead:
+ *
+ * - at or inside `NOW_WINDOW_MS`, including a minute or two already past, the
+ *   post is published NOW. Nothing is handed to their scheduler, so their
+ *   minimum lead never comes into it.
+ * - beyond that it is a scheduled post, and `MIN_LEAD_MS` is one minute rather
+ *   than five, because a minute out is a real thing to want and their
+ *   scheduler is being given a time it can honour.
+ * - further back than `PAST_GRACE_MS` is a mistake, not an intention. A batch
+ *   whose first row still says 8am at four in the afternoon should say so
+ *   rather than quietly firing the lot.
+ */
+const MIN_LEAD_MS = 60_000;
+const NOW_WINDOW_MS = 2 * 60_000;
+const PAST_GRACE_MS = 60 * 60_000;
 
 /** How long a cut's signed url has to outlive the moment it is minted.
  *
@@ -93,6 +117,9 @@ export type BatchInput = {
  */
 export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "your session expired. sign in again." };
 
   const dealId = String(input.dealId ?? "").trim();
@@ -152,8 +179,14 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
     if (Number.isNaN(when.getTime())) {
       return stopHere(done, "one of the times did not read. check the schedule step.");
     }
-    if (when.getTime() < Date.now() + MIN_LEAD_MS) {
-      return stopHere(done, "the first post has to be at least five minutes out.");
+    const lead = when.getTime() - Date.now();
+    if (lead < -PAST_GRACE_MS) {
+      return stopHere(done, "that time has already gone. pick a new one on the schedule step.");
+    }
+    // "now" is the absence of a scheduled_date, not a scheduled_date of now.
+    const immediate = lead <= NOW_WINDOW_MS;
+    if (!immediate && lead < MIN_LEAD_MS) {
+      return stopHere(done, "that is too soon to schedule. leave a minute, or set it to now.");
     }
 
     const video = await publicVideoUrl(supabase, user.id, String(post.ref ?? ""));
@@ -162,11 +195,12 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
     let result;
     try {
       result = await publishVideo({
+        key: postKey,
         username: profile.upload_post_username,
         platforms,
         caption,
         videoUrl: video.url,
-        scheduledDate: when.toISOString(),
+        scheduledDate: immediate ? undefined : when.toISOString(),
         facebookPageId: profile.facebook_page_id,
         options,
       });
@@ -197,7 +231,9 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
       // nothing branches on would be a migration for a label.
       source_kind: post.source === "upload" ? "upload" : "editor",
       source_ref: String(post.ref ?? "").slice(0, 400) || null,
-      scheduled_for: when.toISOString(),
+      // what actually happened, not what the form said: a post sent now is
+      // recorded as now, so the queue does not show it as still to come.
+      scheduled_for: (immediate ? new Date() : when).toISOString(),
       notified_at: bornTerminal ? new Date().toISOString() : null,
       ...row,
     });
@@ -296,6 +332,9 @@ export async function movePost(
   min: number | null
 ): Promise<BatchState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "your session expired. sign in again." };
 
   const { data: post } = await supabase
@@ -313,13 +352,15 @@ export async function movePost(
   const minute = min ?? wallClock(current, tz).min;
   const when = instantOf(day, minute, tz);
 
+  // moving one is always a re-schedule upstream, never a publish, so it keeps
+  // the scheduled floor with no "now" window in front of it.
   if (when.getTime() < Date.now() + MIN_LEAD_MS) {
-    return { error: "that is too soon. leave at least five minutes." };
+    return { error: "that is too soon. leave at least a minute." };
   }
 
   if (post.job_id) {
     try {
-      await editScheduledJob(post.job_id, { scheduledDate: when.toISOString() });
+      await editScheduledJob(post.job_id, { scheduledDate: when.toISOString() }, postKey);
     } catch (err) {
       return {
         error: err instanceof UploadPostError ? err.message : "could not move it upstream.",
@@ -346,6 +387,9 @@ export async function movePost(
  */
 export async function dropPost(postId: string): Promise<BatchState> {
   const { supabase, user } = await authed();
+  // the workspace's own upload-post key when it has pasted one, the deploy's
+  // env otherwise. resolved once per action rather than per post.
+  const postKey = await apiKey("upload_post", user?.id ?? null);
   if (!user) return { error: "your session expired. sign in again." };
 
   const { data: post } = await supabase
@@ -360,7 +404,7 @@ export async function dropPost(postId: string): Promise<BatchState> {
   if (live) {
     if (post.job_id) {
       try {
-        await cancelScheduledJob(post.job_id);
+        await cancelScheduledJob(post.job_id, postKey);
       } catch (err) {
         return {
           error:

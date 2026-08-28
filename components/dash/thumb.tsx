@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BASE_PATH } from "@/lib/base-path";
 
 /**
  * A platform thumbnail, served through our own origin.
@@ -54,8 +55,10 @@ export function Thumb({
       // session token from the api call that made them, the cdns judge a
       // cross-site image request on more than its referer, and a tracker
       // blocker has cdninstagram.com listed before either of those matters.
-      // /api/scrape/thumb makes every one of these same-origin.
-      src={`/api/scrape/thumb?u=${encodeURIComponent(src)}`}
+      // /api/scrape/thumb makes every one of these same-origin. BASE_PATH
+      // because a plain img is not something next rewrites, and under the
+      // /creatorempire prefix a bare /api/... is somebody else's route.
+      src={`${BASE_PATH}/api/scrape/thumb?u=${encodeURIComponent(src)}`}
       alt=""
       loading="lazy"
       onError={() => setBroken(true)}

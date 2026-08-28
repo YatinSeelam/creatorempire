@@ -15,6 +15,7 @@ import { PLATFORMS, type MilestoneTier, type Platform } from "@/lib/deals";
 import { parseHandle, parsePostUrl, resolveShortLink } from "@/lib/ingest/urls";
 import { dueAccounts, syncAccount, thawDeal, type SyncResult } from "@/lib/ingest/sync";
 import { parseCents, parseCentsOrZero, parseCount, shortDate, today } from "@/lib/money";
+import { absoluteUrl } from "@/lib/site-url";
 import { createClient } from "@/lib/supabase/server";
 import { dealScope, loadWorkspace } from "@/lib/workspace";
 
@@ -685,10 +686,10 @@ export async function setVideoStats(_prev: DealState, formData: FormData): Promi
 const REFRESH_CONC = 3;
 
 /**
- * Stop starting accounts here. A server action killed at the platform's cap
- * loses its reply, and by then the api calls are spent and the allowance is
- * down one, so the budget has to leave room to finish the account in flight and
- * write the receipt.
+ * Stop starting accounts here. The sweep runs inside `after()`, which keeps the
+ * invocation alive past the reply but not past the platform's cap, so the
+ * budget has to leave room to finish the account in flight, write the receipt
+ * and send the email.
  */
 const REFRESH_BUDGET_MS = 200_000;
 
@@ -702,10 +703,9 @@ export type RefreshState = DealState & {
 /**
  * How long the sweep took, in the words somebody would use.
  *
- * The dialog can only promise "a big roster can take a minute", because nothing
- * on the client knows the roster size until the action has already run. Saying
- * afterwards what it actually took is the honest version of that estimate, and
- * it is what tells somebody whether the next one is worth starting.
+ * Nothing on screen can report this any more — the reply is sent before the
+ * sweep starts — so it reads on the email, which is the only place the real
+ * duration is now known.
  */
 function humanDuration(ms: number): string {
   const seconds = Math.max(1, Math.round(ms / 1000));
@@ -724,6 +724,19 @@ type Claim = {
 };
 
 /**
+ * A provider error, ended so a sentence can be put after it.
+ *
+ * These are written as fragments on purpose — "usage logging is not set up, so
+ * scraping is switched off, so this platform cannot be pulled yet" is a clause
+ * that reads well on an account row. Gluing "That still used a refresh." onto
+ * it left two sentences with nothing between them.
+ */
+function sentence(text: string): string {
+  const t = text.trim();
+  return !t || /[.!?]$/.test(t) ? t : `${t}.`;
+}
+
+/**
  * The "pull everything now" button, and the only manual scrape in the product.
  *
  * The nightly cron leaves an account alone for `SYNC_INTERVAL_DAYS`, which is
@@ -734,6 +747,14 @@ type Claim = {
  * It sweeps every account, not one deal. A per-deal button costing the same as
  * a full sweep would only ever be the worse choice, and one that cost nothing
  * would make the allowance decorative.
+ *
+ * **The reply comes back before the scrape does.** Everything that can be
+ * decided for free — the session, the allowance, whether there is anything to
+ * pull at all — happens in the request and is answered there. The sweep itself
+ * goes to `after()`, so the person is told it started and is free to leave; the
+ * numbers land on the rows a few minutes later and an email says so. That is
+ * also what makes the failure modes honest: the three checks that can hand the
+ * allowance straight back still run before anybody is told they spent one.
  */
 export async function refreshEverything(
   _prev: RefreshState,
@@ -784,97 +805,144 @@ export async function refreshEverything(
   // rebound after the narrowing above: a hoisted function declaration does not
   // see it, and the worker below is one.
   const queue = accounts;
-  const startedAt = Date.now();
-  const results: SyncResult[] = [];
-  let cursor = 0;
-  let stoppedEarly = false;
 
-  async function worker() {
-    while (cursor < queue.length) {
-      if (Date.now() - startedAt > REFRESH_BUDGET_MS) {
-        stoppedEarly = true;
-        return;
-      }
-      const account = queue[cursor++];
-      // "manual" is what keeps this on the person's daily cap and off the
-      // cron's budget. the ledger row carries it, so the two spends stay
-      // tellable apart on the usage page.
-      results.push(
-        await syncAccount(supabase, account, account.rules, new Date(), { source: "manual" })
-      );
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(REFRESH_CONC, queue.length) }, () => worker())
-  );
-
-  const seen = results.reduce((n, r) => n + r.seen, 0);
-  const apiCalls = results.reduce((n, r) => n + r.apiCalls, 0);
-  const failed = results.filter((r) => !r.ok);
-
-  // the receipt, written whatever the outcome. a sweep where every account
-  // failed still made the calls.
-  await supabase.rpc("finish_manual_refresh", {
-    p_id: claim.id,
-    p_accounts: results.length,
-    p_videos_seen: seen,
-    p_api_calls: apiCalls,
-  });
-
-  revalidatePath("/deals", "layout");
-  revalidatePath("/dashboard");
-
-  if (results.length > 0 && failed.length === results.length) {
-    return {
-      ...spent,
-      error: `${failed[0]?.error ?? "Every account failed."} That still used a refresh.`,
-    };
-  }
-
-  // the numbers, then the receipt, then what is left. sent after the reply so a
-  // dead mail provider cannot fail a sweep that already worked.
+  /**
+   * The sweep itself, handed to `after()` so it outlives the reply.
+   *
+   * It used to be awaited, which made the browser the thing holding the scrape
+   * up: a closed tab, a slept laptop or a flaky connection killed a sweep that
+   * had already been paid for, and the dialog had to beg somebody to sit and
+   * watch a counter. `after()` runs the callback once the response is on the
+   * wire and keeps the serverless invocation alive for it, so leaving the site
+   * is no longer an event the sweep can notice.
+   *
+   * Everything it needs is captured here, before the reply: the account list is
+   * already read, and `supabase` carries the session's own token, so the writes
+   * still land under rls as this person. Nothing in here may throw out of the
+   * callback — an `after` that rejects is an unhandled rejection, not a
+   * failed request somebody can retry — so the whole body is wrapped.
+   */
   after(async () => {
-    const to = await emailForUser(supabase, user.id, "notify_deals");
-    if (!to) return;
+    const startedAt = Date.now();
+    const results: SyncResult[] = [];
+    let cursor = 0;
 
-    const lines = [
-      `${results.length} account${results.length === 1 ? "" : "s"} pulled, ${seen} video${seen === 1 ? "" : "s"} read.`,
-    ];
-    if (failed.length) {
-      lines.push(`${failed.length} could not be reached, so those numbers are unchanged.`);
+    try {
+      async function worker() {
+        while (cursor < queue.length) {
+          if (Date.now() - startedAt > REFRESH_BUDGET_MS) return;
+          const account = queue[cursor++];
+          // "manual" is what keeps this on the person's daily cap and off the
+          // cron's budget. the ledger row carries it, so the two spends stay
+          // tellable apart on the usage page.
+          results.push(
+            await syncAccount(supabase, account, account.rules, new Date(), { source: "manual" })
+          );
+        }
+      }
+
+      await Promise.all(
+        Array.from({ length: Math.min(REFRESH_CONC, queue.length) }, () => worker())
+      );
+
+      const seen = results.reduce((n, r) => n + r.seen, 0);
+      const apiCalls = results.reduce((n, r) => n + r.apiCalls, 0);
+      const failed = results.filter((r) => !r.ok);
+
+      // A sweep that never reached a provider spent nothing, so it owes nothing.
+      //
+      // "anything that touched a provider is charged" is the rule, and
+      // `apiCalls` is what says whether one was touched: it is only written
+      // after a fetch comes back, so a `ProviderUnavailable` — no key, no
+      // ledger, over the daily cap — leaves it at zero. Without this a deploy
+      // missing an env var took one of six refreshes off somebody to tell them
+      // about its own configuration, and they could spend the month's
+      // allowance without a single outbound call. The reply has already
+      // promised the spend by the time this runs, so the refund shows up as a
+      // higher count on the next page load rather than in that sentence.
+      const refunded =
+        results.length > 0 && apiCalls === 0 && failed.length === results.length;
+
+      if (refunded) {
+        await supabase.rpc("cancel_manual_refresh", { p_id: claimId });
+      } else {
+        // the receipt, written whatever the outcome. a sweep where every
+        // account failed still made the calls.
+        await supabase.rpc("finish_manual_refresh", {
+          p_id: claimId,
+          p_accounts: results.length,
+          p_videos_seen: seen,
+          p_api_calls: apiCalls,
+        });
+      }
+
+      // the numbers are on the rows now, so the two pages that print them have
+      // to be rebuilt. this is what a person coming back to an open tab sees.
+      revalidatePath("/deals", "layout");
+      revalidatePath("/dashboard");
+
+      // the receipt. nobody was watching when this finished, which is the whole
+      // point of the change, so the email stopped being a nicety and became the
+      // way anybody learns the sweep is done.
+      const to = await emailForUser(supabase, user.id, "notify_deals");
+      if (!to) return;
+
+      const trouble = failed[0]?.error;
+      const lines = refunded
+        ? [
+            `${sentence(trouble ?? "Every account failed.")}`,
+            "Nothing was pulled, so the refresh has been put back on your allowance.",
+          ]
+        : [
+            `${results.length} account${results.length === 1 ? "" : "s"} pulled, ${seen} video${seen === 1 ? "" : "s"} read.`,
+          ];
+
+      if (!refunded && failed.length) {
+        lines.push(`${failed.length} could not be reached, so those numbers are unchanged.`);
+      }
+      if (!refunded && cursor < queue.length) {
+        lines.push(`${queue.length - cursor} were left for the next run.`);
+      }
+      if (!refunded) {
+        lines.push(`took ${humanDuration(Date.now() - startedAt)}.`);
+      }
+
+      await sendEmail({
+        to,
+        subject: refunded ? "your refresh could not run" : "your numbers are fresh",
+        html: notificationHtml({
+          heading: refunded ? "your refresh could not run" : "your numbers are fresh",
+          lines,
+          cta: { label: "see your deals", url: absoluteUrl("/deals") },
+        }),
+      });
+    } catch (err) {
+      // a claim left neither finished nor cancelled would eat one of six
+      // forever, so the last thing this does is hand it back.
+      console.error("[refresh] background sweep failed", err);
+      // the builder is thenable rather than a promise, so awaiting it is what
+      // gives this a catch to attach to.
+      try {
+        await supabase.rpc("cancel_manual_refresh", { p_id: claimId });
+      } catch {
+        // nothing left to try. the receipt row is the record either way.
+      }
     }
-    lines.push(`took ${humanDuration(Date.now() - startedAt)}.`);
-
-    await sendEmail({
-      to,
-      subject: "your numbers are fresh",
-      html: notificationHtml({
-        heading: "your numbers are fresh",
-        lines,
-        cta: { label: "see your deals", url: "https://www.creatorempire.app/deals" },
-      }),
-    });
   });
 
-  const parts = [
-    `${results.length} account${results.length === 1 ? "" : "s"} pulled`,
-    `${seen} video${seen === 1 ? "" : "s"} read`,
-  ];
-  if (failed.length) {
-    parts.push(`${failed.length} failed`);
-  }
-  if (stoppedEarly) {
-    parts.push(`${queue.length - results.length} left for the next run`);
-  }
-  parts.push(`took ${humanDuration(Date.now() - startedAt)}`);
-  parts.push(
+  // The reply, sent before a single provider has been touched. It can only
+  // promise, so it says what was started and roughly how long it takes rather
+  // than reporting numbers it does not have yet.
+  const roster = `${queue.length} account${queue.length === 1 ? "" : "s"}`;
+  const left =
     claim.remaining === 0
-      ? `none left until ${shortDate(claim.resets_on)}`
-      : `${claim.remaining} left this month`
-  );
+      ? `None left until ${shortDate(claim.resets_on)}.`
+      : `${claim.remaining} left this month.`;
 
-  return { ...spent, ok: `${parts.join(", ")}.` };
+  return {
+    ...spent,
+    ok: `Pulling ${roster} now. This takes about five minutes and keeps running if you close the page. ${left}`,
+  };
 }
 
 // ------------------------------------------------------------------ payouts

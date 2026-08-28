@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { PersonAvatar } from "@/components/dash/thumb";
-import { Panel, Pill, Row, Stat } from "@/components/dash/ui";
+import { PeopleBoard, type PersonRow } from "@/components/dash/people-board";
 import {
+  accessOf,
+  loadGrants,
   loadPeople,
   personInitial,
   personName,
   totalPosts,
   totalViews,
+  type Person,
 } from "@/lib/founder";
+import { loadCreditHealth } from "@/lib/founder-credits";
 import { ago, views as compactViews } from "@/lib/money";
 import { microsToUsd } from "@/lib/usage-pricing";
 
@@ -19,130 +21,139 @@ export const metadata: Metadata = {
 
 const fmt = (n: number) => n.toLocaleString("en-US");
 
+/**
+ * The whole founder section, on one page.
+ *
+ * Everything here has been fighting for room it does not need. The totals were
+ * four cards a hundred and fifty pixels tall to hold a single digit each; they
+ * are one strip now, because five small numbers read as a sentence and do not
+ * each need a box. The people were cards inside a panel, which is a border
+ * inside a border, so the panel is a heading and the cards sit on the page.
+ *
+ * The top band was still mostly empty — five figures against seventeen hundred
+ * pixels — and under it sat a heading reading "Everyone" over a count, which is
+ * furniture: the grid beneath it is self evidently everyone. So the search took
+ * the space the figures were not using, the chips took the heading's line, and
+ * the count moved to the end of that row where it now says how much of the
+ * roster is showing rather than how big it is.
+ *
+ * The rows are formatted here and handed over as strings, because the board is
+ * a client component and this file's helpers reach for `next/headers`.
+ */
 export default async function AdminPeoplePage({
   searchParams,
 }: {
   searchParams: Promise<{ viewas_error?: string }>;
 }) {
-  const [{ viewas_error: viewasError }, people] = await Promise.all([
-    searchParams,
-    loadPeople(),
-  ]);
+  const [{ viewas_error: viewasError }, people, grants, credits] =
+    await Promise.all([searchParams, loadPeople(), loadGrants(), loadCreditHealth()]);
 
   const posts = people.reduce((n, p) => n + totalPosts(p), 0);
   const viewCount = people.reduce((n, p) => n + totalViews(p), 0);
   const spend = people.reduce((n, p) => n + p.spend_micros, 0);
-  const scrapeSpend = people.reduce((n, p) => n + p.scrape_micros, 0);
-  const flowSpend = people.reduce((n, p) => n + p.flow_micros, 0);
   const deals = people.reduce((n, p) => n + p.deal_count, 0);
+  const founders = people.filter((p) => accessOf(p) === "founder").length;
+
+  // a grant written against an address nobody has signed up on yet. It is real
+  // access the moment they do, so it is listed here rather than nowhere: an
+  // invisible permission is worse than an odd looking card.
+  const known = new Set(people.map((p) => (p.email ?? "").toLowerCase()));
+  const waiting = grants.filter((g) => !known.has(g.email));
+
+  const rows: PersonRow[] = [
+    ...people.map(toRow),
+    ...waiting.map(
+      (g): PersonRow => ({
+        userId: "",
+        name: g.email,
+        initial: g.email.charAt(0).toUpperCase() || "?",
+        avatar: null,
+        email: g.email,
+        seen: "never signed in",
+        posts: "0",
+        views: "0",
+        deals: "0",
+        spend: microsToUsd(0),
+        level: accessOf({ grant_role: g.role, seat_role: null }),
+      })
+    ),
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {viewasError && (
-        <p className="rounded-card border border-line bg-ember px-5 py-3.5 text-[13.5px] text-flame-dark">
+        <p className="rounded-card border border-line bg-ember px-5 py-3 text-[13.5px] text-flame-dark">
           view as did not start: {viewasError}
         </p>
       )}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          label="People"
+
+      <PeopleBoard rows={rows}>
+        {/* every total on the page, sharing one band with the search. */}
+        <Figure
           value={fmt(people.length)}
-          note={
-            people.length === 0
-              ? "nobody has signed up yet"
-              : `${fmt(people.filter((p) => p.is_admin).length)} of them are founders`
+          label={founders ? `people, ${fmt(founders)} founder` : "people"}
+        />
+        <Figure value={fmt(posts)} label="posts" />
+        <Figure value={compactViews(viewCount)} label="views" />
+        <Figure value={fmt(deals)} label={deals === 1 ? "deal" : "deals"} />
+        <Figure
+          value={microsToUsd(spend)}
+          label="spent"
+          title={
+            credits.burned === 0
+              ? "no credits burned in 30 days"
+              : `${fmt(credits.burned)} credits in 30 days, ${credits.perDay.toFixed(1)} a day`
           }
         />
-        <Stat
-          label="Posts"
-          value={fmt(posts)}
-          note="tracked, pulled and posted, all together"
-        />
-        <Stat label="Views" value={compactViews(viewCount)} note="across everything above" />
-        <Stat
-          label="Spend"
-          value={microsToUsd(spend)}
-          note={`${microsToUsd(scrapeSpend)} scraping, ${microsToUsd(flowSpend)} ai flow`}
-        />
-      </div>
-
-      <Panel
-        title="Everyone"
-        padded={false}
-        action={
-          <span className="text-[13px] text-ink-50">
-            {fmt(deals)} {deals === 1 ? "deal" : "deals"} between them
-          </span>
-        }
-      >
-        {people.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <p className="text-[15px] font-bold tracking-[-0.015em]">
-              Nobody has signed up yet.
-            </p>
-            <p className="mx-auto mt-1 max-w-[52ch] text-[13.5px] leading-[1.6] text-ink-50">
-              A profile row is written the first time somebody signs in, so this
-              list is every account that has ever reached the app.
-            </p>
-          </div>
-        ) : (
-          people.map((p) => {
-            const name = personName(p);
-            const made = totalPosts(p);
-            const seen = p.last_call_at ?? p.last_posted_at;
-
-            return (
-              <Row key={p.user_id}>
-                <Link
-                  href={`/founder/people/${p.user_id}`}
-                  className="flex min-w-0 flex-1 items-center gap-3 py-0.5"
-                >
-                  <PersonAvatar
-                    src={p.avatar_url}
-                    initial={personInitial(p)}
-                    className="size-10"
-                  />
-                  <span className="min-w-0">
-                    <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-                      <span className="truncate text-[15px] font-bold tracking-[-0.015em]">
-                        {name}
-                      </span>
-                      {p.is_admin && <Pill tone="flame">Founder</Pill>}
-                    </span>
-                    <span className="mt-0.5 block truncate text-[13.5px] text-ink-50">
-                      {p.email ?? "no email"}
-                      {seen ? ` · last seen ${ago(seen)}` : " · never used it"}
-                    </span>
-                  </span>
-                </Link>
-
-                <div className="flex shrink-0 items-center gap-3 text-right sm:gap-5">
-                  <Cell value={fmt(made)} label="posts" />
-                  <Cell value={compactViews(totalViews(p))} label="views" />
-                  <Cell value={fmt(p.deal_count)} label="deals" />
-                  <Cell value={microsToUsd(p.spend_micros)} label="spend" />
-                </div>
-              </Row>
-            );
-          })
+        {credits.balance !== null && (
+          <Figure
+            value={fmt(credits.balance)}
+            label={
+              credits.daysLeft === null
+                ? "credits left"
+                : `credits, ${fmt(credits.daysLeft)} days`
+            }
+          />
         )}
-      </Panel>
-
-      <p className="text-[13.5px] leading-[1.6] text-ink-50">
-        Spend is everything a person has cost across the product: scrape credits
-        plus ai flow tokens, priced by the rates in code. Open somebody to see
-        the breakdown.
-      </p>
+      </PeopleBoard>
     </div>
   );
 }
 
-/** Same right-aligned number with its name under it that Usage uses. */
-function Cell({ value, label }: { value: string; label: string }) {
+/** A roster row, in the words the card prints. */
+function toRow(p: Person): PersonRow {
+  const seen = p.last_call_at ?? p.last_posted_at;
+  return {
+    userId: p.user_id,
+    name: personName(p),
+    initial: personInitial(p),
+    avatar: p.avatar_url,
+    email: p.email ?? "",
+    seen: seen ? ago(seen) : "never used it",
+    posts: fmt(totalPosts(p)),
+    views: compactViews(totalViews(p)),
+    deals: fmt(p.deal_count),
+    spend: microsToUsd(p.spend_micros),
+    level: accessOf(p),
+  };
+}
+
+/** One number in the strip: the figure, and what it counts under it. */
+function Figure({
+  value,
+  label,
+  title,
+}: {
+  value: string;
+  label: string;
+  title?: string;
+}) {
   return (
-    <div className="w-[64px] shrink-0 text-right sm:w-[76px]">
-      <p className="truncate text-[15px] font-bold tabular-nums">{value}</p>
-      <p className="text-[12.5px] text-ink-50">{label}</p>
+    <div title={title}>
+      <p className="text-[20px] font-extrabold leading-none tracking-[-0.03em]">
+        {value}
+      </p>
+      <p className="mt-1 text-[12px] text-ink-50">{label}</p>
     </div>
   );
 }

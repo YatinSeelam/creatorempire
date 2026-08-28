@@ -1,10 +1,24 @@
 "use client";
 
 import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useFormStatus } from "react-dom";
 import { refreshEverything, type RefreshState } from "@/app/(dash)/deals/actions";
 import type { RefreshQuota } from "@/lib/deals";
 import { shortDate } from "@/lib/money";
+
+/**
+ * How long to keep re-reading the page after a sweep is started, and how often.
+ *
+ * The scrape runs on the server after the reply, so nothing pushes the new
+ * numbers down. Polling the route is the whole mechanism: it is one rsc request
+ * every forty five seconds for six minutes, which comfortably covers the "about
+ * five minutes" the dialog promises and then stops rather than sitting on a
+ * forgotten tab forever. Leaving before it finishes costs nothing — the sweep
+ * does not know the page exists.
+ */
+const POLL_EVERY_MS = 45_000;
+const POLL_FOR_MS = 360_000;
 
 /**
  * The manual refresh, and the confirmation in front of it.
@@ -23,6 +37,11 @@ import { shortDate } from "@/lib/money";
  * authority: `claim_manual_refresh()` in the database is, and it takes the
  * refresh under a per-person lock, so two tabs racing cannot both spend the last
  * one.
+ *
+ * **Nothing here waits for the scrape.** The action claims the refresh and
+ * hands the sweep to the server, so the reply lands in a moment and says what
+ * was started rather than what was found. This page then polls itself for a few
+ * minutes to fill the numbers in, and closing it changes nothing.
  */
 export function RefreshAll({
   quota,
@@ -34,6 +53,12 @@ export function RefreshAll({
 }) {
   const [open, setOpen] = useState(false);
   const [state, action] = useActionState<RefreshState, FormData>(refreshEverything, {});
+  const router = useRouter();
+  // how many sweeps this page has started. a counter rather than a timestamp
+  // because the increment happens during render, and `Date.now()` there is an
+  // impure read. the effect below takes its own clock, which is where reading
+  // one is allowed. bumping it is what restarts the poll for a second sweep.
+  const [pulls, setPulls] = useState(0);
 
   // a database without the migration answers with no reset date. that is "count
   // unknown", not "none left" — the button still works and the claim is still
@@ -52,7 +77,26 @@ export function RefreshAll({
   if (seen !== state) {
     setSeen(state);
     if (state.ok || state.error) setOpen(false);
+    // only an accepted sweep is worth polling for. an error means nothing was
+    // started, so there is nothing coming.
+    if (state.ok) setPulls((n) => n + 1);
   }
+
+  // fill the numbers in while somebody is still here. `router.refresh()` re-runs
+  // the server components for the current route, which is the same rebuild the
+  // sweep's revalidatePath queues, so a page left open catches up on its own.
+  useEffect(() => {
+    if (pulls === 0) return;
+    const startedAt = Date.now();
+    const id = setInterval(() => {
+      if (Date.now() - startedAt > POLL_FOR_MS) {
+        clearInterval(id);
+        return;
+      }
+      router.refresh();
+    }, POLL_EVERY_MS);
+    return () => clearInterval(id);
+  }, [pulls, router]);
 
   useEffect(() => {
     if (!open) return;
@@ -135,7 +179,7 @@ export function RefreshAll({
                   Refresh every account?
                 </h2>
                 <p className="mt-0.5 text-[13px] text-ink-50">
-                  This pulls all of them right now.
+                  This pulls all of them now, in the background.
                 </p>
               </div>
             </div>
@@ -165,7 +209,9 @@ export function RefreshAll({
               )}
 
               <p className="mt-3 text-[12.5px] leading-[1.5] text-ink-50">
-                A big roster can take a minute. Leave this page open.
+                It takes about five minutes. This runs on our side, so you can
+                close this page and the numbers will be waiting when you come
+                back. We will email you when they land.
               </p>
 
               <form action={action} className="mt-4 flex items-center justify-end gap-2">
@@ -189,25 +235,14 @@ export function RefreshAll({
 /**
  * Split out so `useFormStatus` can see the form it belongs to.
  *
- * The running state counts seconds rather than promising an estimate, because
- * nothing on the client knows how many accounts there are: the count lives
- * behind rls and the action is what discovers it. A ticking number is the
- * honest version of "this takes a while" — it says the sweep is alive, which is
- * the actual question somebody staring at a spinner for a minute has. The
- * reply then says what it really took.
+ * This used to tick a second counter, because the click held the whole sweep
+ * open and somebody staring at a spinner for a minute needed to know it was
+ * alive. It no longer does: the action claims the refresh and hands the scrape
+ * to the server, so `pending` is now a round trip rather than a scrape and a
+ * counter on it would be measuring the wrong thing.
  */
 function Confirm({ last }: { last: boolean }) {
   const { pending } = useFormStatus();
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    if (!pending) return;
-    // measured from a timestamp rather than counted up, so a throttled tab
-    // reports the real wait instead of however many ticks it was awake for.
-    const startedAt = Date.now();
-    const id = setInterval(() => setElapsed(Math.round((Date.now() - startedAt) / 1000)), 1000);
-    return () => clearInterval(id);
-  }, [pending]);
 
   return (
     <button
@@ -215,11 +250,7 @@ function Confirm({ last }: { last: boolean }) {
       disabled={pending}
       className="flex h-10 items-center rounded-pill bg-flame px-5 text-[14px] font-semibold text-on-accent transition-colors hover:bg-flame-dark disabled:opacity-60"
     >
-      {pending
-        ? `Pulling every account${elapsed > 2 ? `, ${elapsed}s` : ""}`
-        : last
-          ? "Use my last one"
-          : "Use one refresh"}
+      {pending ? "Starting" : last ? "Use my last one" : "Use one refresh"}
     </button>
   );
 }

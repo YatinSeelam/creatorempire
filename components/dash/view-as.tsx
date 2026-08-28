@@ -14,7 +14,7 @@ export function ViewAsButton({ userId, name }: { userId: string; name: string })
       <input type="hidden" name="user_id" value={userId} />
       <button
         type="submit"
-        className="h-9 shrink-0 rounded-pill border border-line px-4 text-[13px] font-semibold text-ink-50 transition-colors hover:text-ink"
+        className="h-9 shrink-0 rounded-md border border-line bg-paper/70 px-4 text-[13px] font-semibold text-ink-50 transition-colors hover:border-ink/25 hover:text-ink"
       >
         view as {first}
       </button>

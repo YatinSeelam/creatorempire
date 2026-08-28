@@ -461,7 +461,8 @@ export type AutopostWorkspaceView = {
   clips: BatchClip[];
   hashtags: string[];
   options: PostOptions;
-  /** false when UPLOAD_POST_API_KEY is unset: connecting is off, not broken */
+  /** false when there is no upload-post key to reach, the workspace's or the
+   *  deploy's: connecting is off, not broken */
   configured: boolean;
   connected: Record<Platform, boolean>;
 };

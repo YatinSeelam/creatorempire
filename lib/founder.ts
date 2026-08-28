@@ -1,4 +1,5 @@
-import { ORG_COLS, type Org, type OrgInvite, type OrgRole } from "@/lib/org";
+import { accessOf, ACCESS_LEVELS, type AccessLevel } from "@/lib/access-levels";
+import { CE_ORG_ID, ORG_COLS, type Org, type OrgInvite, type OrgRole } from "@/lib/org";
 import { isGranted, toolSlugFromKey, type OrgOverride } from "@/lib/org-overrides";
 import { getPricing } from "@/lib/scrape/usage";
 import { requireFounderView } from "@/lib/supabase/founder";
@@ -26,6 +27,10 @@ export type Person = {
   niche: string | null;
   created_at: string;
   is_admin: boolean;
+  /** their row on `admin_emails`, exactly. null when they hold no grant. */
+  grant_role: "founder" | "creator" | null;
+  /** their seat on the one workspace, or null when they hold none. */
+  seat_role: OrgRole | null;
   portfolio_slug: string | null;
   portfolio_published: boolean;
   deal_count: number;
@@ -170,6 +175,10 @@ function toPerson(row: Record<string, unknown>): Person {
     niche: (row.niche as string) ?? null,
     created_at: String(row.created_at),
     is_admin: row.is_admin === true,
+    // both are stitched on by the loaders: `admin_people` knows whether there
+    // is a grant, not which one, and knows nothing about seats at all.
+    grant_role: null,
+    seat_role: null,
     portfolio_slug: (row.portfolio_slug as string) ?? null,
     portfolio_published: row.portfolio_published === true,
     deal_count: num(row.deal_count),
@@ -237,16 +246,49 @@ type FlowRow = {
   cache_write_tokens: number;
 };
 
+export { accessOf, ACCESS_LEVELS };
+export type { AccessLevel };
+
+/** One row of `admin_emails`. The email is the key: there may be no account. */
+export type Grant = { email: string; role: string; created_at: string };
+
+/**
+ * Every grant on the platform, whether or not anybody has signed up on it.
+ *
+ * Read separately from the roster so the People page can show the leftovers:
+ * an access grant written against an address that has never signed in has no
+ * profile row and would otherwise be a permission nobody can see or take back.
+ */
+export async function loadGrants(): Promise<Grant[]> {
+  const { supabase } = await requireFounderView("/founder");
+
+  const { data } = await supabase
+    .from("admin_emails")
+    .select("email, role, created_at")
+    .order("created_at", { ascending: true });
+
+  return (data ?? []).map((g) => ({
+    email: String(g.email).toLowerCase(),
+    role: String(g.role ?? "founder"),
+    created_at: String(g.created_at),
+  }));
+}
+
 /**
  * The whole roster, newest signup first, each person carrying what they have
  * cost: scrape credits priced by `getPricing()` plus every flow turn priced by
  * `flowCostMicros()`. One batched read of the flow ledger, rolled up in js, so
- * the roster is two queries however many people there are.
+ * the roster is a fixed number of queries however many people there are.
+ *
+ * The grant and the seat ride along because the list is where access is now
+ * changed. Both are tiny reads on this deploy (one workspace, a handful of
+ * founders) and doing them here is what stops the page asking per row.
  */
 export async function loadPeople(): Promise<Person[]> {
   const { supabase } = await requireFounderView("/founder");
 
-  const [{ data }, { data: flowRows }, pricing] = await Promise.all([
+  const [{ data }, { data: flowRows }, { data: grantRows }, { data: seatRows }, pricing] =
+    await Promise.all([
     supabase
       .from("admin_people")
       .select("*")
@@ -257,8 +299,22 @@ export async function loadPeople(): Promise<Person[]> {
         "user_id, model, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens"
       )
       .limit(FLOW_EVENT_LIMIT),
+    supabase.from("admin_emails").select("email, role"),
+    // the one workspace. an empty CE_ORG_ID would match nothing, which is the
+    // right answer for a deploy that has not been pointed at a workspace yet.
+    supabase.from("org_members").select("user_id, role").eq("org_id", CE_ORG_ID),
     getPricing(),
   ]);
+
+  const grants = new Map<string, string>();
+  for (const g of (grantRows ?? []) as { email: string; role: string }[]) {
+    grants.set(String(g.email).toLowerCase(), String(g.role ?? "founder"));
+  }
+
+  const seats = new Map<string, OrgRole>();
+  for (const s of (seatRows ?? []) as { user_id: string; role: OrgRole }[]) {
+    seats.set(s.user_id, s.role);
+  }
 
   const flow = new Map<string, { turns: number; micros: number }>();
   for (const r of (flowRows ?? []) as (FlowRow & { user_id: string })[]) {
@@ -279,6 +335,9 @@ export async function loadPeople(): Promise<Person[]> {
     p.flow_micros = f?.micros ?? 0;
     p.scrape_micros = p.credits_spent * pricing.microsPerCredit;
     p.spend_micros = p.scrape_micros + p.flow_micros;
+    p.grant_role =
+      (grants.get((p.email ?? "").toLowerCase()) as Person["grant_role"]) ?? null;
+    p.seat_role = seats.get(p.user_id) ?? null;
     return p;
   });
 }
@@ -467,6 +526,27 @@ export async function loadPerson(userId: string): Promise<PersonDetail | null> {
   p.flow_micros = flowMicros;
   p.scrape_micros = p.credits_spent * pricing.microsPerCredit;
   p.spend_micros = p.scrape_micros + p.flow_micros;
+
+  // what they are allowed to do, read exactly rather than inferred from the
+  // view's `is_admin`, which is true for any grant and cannot tell the two
+  // apart. Two one-row reads, after the batch, because both key off `p.email`.
+  const [grant, seat] = await Promise.all([
+    p.email
+      ? supabase
+          .from("admin_emails")
+          .select("role")
+          .eq("email", p.email.toLowerCase())
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("org_members")
+      .select("role")
+      .eq("org_id", CE_ORG_ID)
+      .eq("user_id", userId)
+      .maybeSingle(),
+  ]);
+  p.grant_role = (grant.data?.role as Person["grant_role"]) ?? null;
+  p.seat_role = (seat.data?.role as OrgRole) ?? null;
 
   return {
     person: p,

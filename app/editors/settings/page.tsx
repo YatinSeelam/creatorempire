@@ -10,6 +10,7 @@ import { ProfileEditor } from "@/components/editors/profile-editor";
 import { Panel, QuietLink } from "@/components/editors/ui";
 import { toSettingsTab } from "@/lib/editing";
 import { createClient } from "@/lib/supabase/server";
+import { BASE_PATH } from "@/lib/base-path";
 
 export const metadata: Metadata = {
   title: "Settings · Creator Empire",
@@ -125,7 +126,7 @@ export default async function EditorSettingsPage({
       </dl>
       {/* a form, not a link. signing out changes state, and a GET that changes
           state gets fired by every link prefetcher there is. */}
-      <form action="/auth/sign-out" method="post" className="mt-5">
+      <form action={`${BASE_PATH}/auth/sign-out`} method="post" className="mt-5">
         <button
           type="submit"
           className="rounded-pill border border-line px-4 py-2 text-[13.5px] font-semibold text-ink-70 transition-colors hover:border-flame hover:text-flame-dark"

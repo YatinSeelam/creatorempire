@@ -70,6 +70,20 @@
   --color-live-soft: #eaf5ed;
   --color-live-line: #cbe5d3;
 
+  /* The founder's mark, and the one gold in the product.
+   *
+   * /founder lists eighty accounts of which five matter, and "founder",
+   * "student" and "no access" as three greys is a list you have to read rather
+   * than scan. Gold is the widest grant, the accent is a seat, and no access
+   * gets no colour at all — the absence is the signal, and it keeps three
+   * quarters of the page quiet.
+   *
+   * Muted rather than metallic: #c9a227 at full strength on white is a warning
+   * label. This pair is the same hue at text and surface weights. */
+  --color-gold: #8a6a12;
+  --color-gold-soft: #fbf4e0;
+  --color-gold-line: #e6d5a4;
+
   --font-sans: var(--font-raleway), ui-sans-serif, system-ui, sans-serif;
 
   /* 22px read as a soft app widget on blocks this large. 14px still reads as a
@@ -182,6 +196,13 @@
   --color-live: light-dark(#2c7a48, #4fb477);
   --color-live-soft: light-dark(#eaf5ed, #16291e);
   --color-live-line: light-dark(#cbe5d3, #2a4634);
+
+  /* the one gold. same move as the green above: #8a6a12 on a near-black card is
+   * brown, so the dark side takes the bright end of the hue and the surface
+   * drops to a tint of it rather than a wash. */
+  --color-gold: light-dark(#8a6a12, #e3c05a);
+  --color-gold-soft: light-dark(#fbf4e0, #2a2413);
+  --color-gold-line: light-dark(#e6d5a4, #4a3f1d);
 }
 
 /* the two that `light-dark()` cannot carry: it takes colours, and these are a
@@ -313,6 +334,15 @@ html:has(.dash-shell)::-webkit-scrollbar {
  * so switching tabs remounts it and replays this. Short and small on purpose —
  * a long travel reads as the layout settling rather than as a response to the
  * click that caused it. */
+/* the dropdown panel, so it arrives rather than appearing. Opacity only: the
+   panel carries an inline transform when it flips upwards, and a keyframe that
+   also wrote transform would fight it for the length of the animation. */
+@keyframes pop {
+  from {
+    opacity: 0;
+  }
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;
@@ -415,4 +445,57 @@ html:has(.dash-shell)::-webkit-scrollbar {
   src: url("/fonts/LuckiestGuy-Regular.ttf") format("truetype");
   font-weight: 700;
   font-display: block;
+}
+
+/**
+ * One pass of light across a card on hover.
+ *
+ * The founder roster is eighty near-identical white rectangles, and hover had
+ * nothing to say beyond a slightly darker border. A sweep is the cheapest way
+ * to make the thing under the cursor feel picked up rather than merely outlined,
+ * and because the gradient's colour is a variable, the same class carries the
+ * gold on a founder and the accent on a student.
+ *
+ * `--sheen` is unset by default and the gradient collapses to transparent, so a
+ * card with no level gets the class and no shine: the absence is the signal
+ * (see --color-gold above), and it costs no second markup path.
+ *
+ * `overflow: hidden` on the host is what clips the pass to the card's corners.
+ * The pseudo-element is `pointer-events: none` because it covers the whole card
+ * and would otherwise eat the click on the link under it.
+ */
+.sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.sheen::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    var(--sheen, transparent) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  opacity: 0;
+}
+
+.sheen:hover::after {
+  transform: translateX(130%);
+  opacity: 1;
+  /* the fade is short and the travel is long, so the pass reads as light moving
+   * rather than as the card changing colour. */
+  transition:
+    transform 850ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 160ms linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheen::after {
+    display: none;
+  }
 }
