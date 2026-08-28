@@ -3,65 +3,19 @@
 // the market imports from here so the two dashboards cannot drift apart.
 
 /**
- * The whole editing market: jobs, claiming, credits, payouts. On since
- * 2026-08-21, when the credits wallet landed and the market became a real
- * two-sided product (creators pay in credits, editors earn $1/$2 a video).
+ * There are no EDITING_ENABLED / EDITOR_HIRING_ENABLED / EDITOR_MARKET_ENABLED
+ * flags any more.
  *
- * Everything that can be reached from outside reads it: the rail row in
- * components/dash/side-nav.tsx, the two route groups (app/(dash)/editing,
- * app/editors) via their layouts, /e/<handle>, and the editor bits on the
- * admin person page.
+ * They were three consts gating a section that was still shipped: /editing, the
+ * /editors marketplace, /e/<handle>, the handoff room, the rail row and the
+ * dashboard's entry points. On 2026-08-28 all of that was DELETED from this
+ * deploy rather than switched off, so a flag promising to bring it back would
+ * be pointing at pages that no longer exist. Bringing editing back means
+ * copying the routes over from ugc flows, not flipping a boolean.
  *
- * A const rather than an env var on purpose: it is a product decision, not a
- * per-deploy one, and this way the dead branches drop out of the bundle.
- *
- * Off again for everyone but the founder, 2026-08-21: the market is finished
- * and rehearsable, but no creator should be spending credits on it until the
- * editor pool is real. Every gate on it (the rail row, /editing, the board,
- * the job workspaces) lets a founder through, so turning this back to `true`
- * is the launch and nothing else changes.
- *
- * Off on creator empire, 2026-08-28, and this time it is announced rather than
- * hidden. A student who was shown an Editing row yesterday and a 404 today
- * would read that as the app breaking, so the row stays on the rail wearing a
- * `soon` chip and /editing renders `app/(dash)/editing/soon.tsx`. The code
- * underneath is untouched: this const is still the only switch, and every page
- * behind it still checks for itself.
+ * The types and labels below stay: they are what a copied file expects to find
+ * and they cost nothing.
  */
-export const EDITING_ENABLED = false;
-
-/**
- * Hiring, which is a smaller thing than the market and ships ahead of it.
- *
- * With this on and EDITING_ENABLED still off, /editors is a public job post an
- * editor can apply to, a free portfolio they can build, and a page at
- * /e/<handle> they can publish. No jobs, no claiming, no payouts: the market
- * pages stay behind their own flag and each one checks for itself now, because
- * the group's layout no longer does it for them.
- */
-/**
- * Off on creator empire, 2026-08-25, with the market. Nobody applies to edit
- * HERE: a student brings their own editor and hands them a link. With both this
- * and EDITOR_MARKET_ENABLED false the whole /editors tree and /e/<handle> 404.
- */
-export const EDITOR_HIRING_ENABLED = false;
-
-/**
- * The two-sided market: the board, claiming, credits, payouts, the editor
- * dashboards under /editors.
- *
- * Off on creator empire, 2026-08-25. A student here already has an editor and
- * that person will never hold a login on this deploy, so a job does not go on a
- * board — it mints a handoff link (lib/editing-handoff.ts) and the whole batch
- * lands on one page the editor can read and download. Delivery comes back
- * manually and the creator files it.
- *
- * A const rather than an env var, same as the two above: it is a product
- * decision, not a per-deploy one, and the dead branches drop out of the bundle.
- * The marketplace code is kept rather than deleted so a screen changing on ugc
- * flows still copies over cleanly.
- */
-export const EDITOR_MARKET_ENABLED = false;
 
 export type EditorStatus = "active" | "paused";
 

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { brand } from "@/lib/content";
-import { EDITING_ENABLED } from "@/lib/editing";
 import { AGENCY_HREF, AGENCY_PEOPLE_HREF, type OrgRole } from "@/lib/org";
 import type { Viewer } from "@/lib/viewer";
 import { AccountMenu } from "./account-menu";
@@ -15,7 +14,8 @@ import { BASE_PATH } from "@/lib/base-path";
  * The rail. One workspace, so there is no picker at the top: the logo and the
  * name, then the few rows this programme actually has.
  *
- * A student gets their own work: dashboard, deals, the scheduler, editing.
+ * A student gets their own work: dashboard, deals, the scheduler, the
+ * portfolio.
  * Somebody who runs the programme gets the students and the door. Nothing
  * else lives on this rail, and nothing is switched on or off by a setting.
  */
@@ -53,14 +53,6 @@ const SchedulerIcon = (
     <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
     <path d="M3.5 9.8h17M8 3.4v3.2M16 3.4v3.2" />
     <path d="M10.6 13.2v4.2l3.4-2.1z" />
-  </>
-);
-
-const EditingIcon = (
-  <>
-    <circle cx="6.2" cy="6.6" r="2.4" />
-    <circle cx="6.2" cy="17.4" r="2.4" />
-    <path d="M8.3 7.9 20 16.2M8.3 16.1 20 7.8M13.4 12l-1.7 1.2" />
   </>
 );
 
@@ -115,7 +107,6 @@ const studentRows: NavRow[] = [
   { href: "/dashboard", label: "Dashboard", icon: HomeIcon },
   { href: "/deals", label: "Deals", icon: DealsIcon },
   { href: "/tools/autoposting", label: "Scheduler", icon: SchedulerIcon },
-  { href: "/editing", label: "Editing", icon: EditingIcon },
   { href: "/portfolio", label: "Portfolio", icon: PortfolioIcon },
 ];
 
@@ -216,16 +207,10 @@ export function SideNav({
 }) {
   const pathname = usePathname();
 
-  // the editing row stays on the rail while the feature is off, wearing the
-  // word that says so. hiding it and then bringing it back reads as the app
-  // changing shape under somebody; a `soon` chip is one row of honesty and the
-  // page behind it says the same thing at length.
-  //
-  // no founder exception. the layout has none either, so a chip that read
-  // differently for a founder would be promising them a page they do not get.
-  const work = studentRows.map((row) =>
-    row.href === "/editing" && !EDITING_ENABLED ? { ...row, badge: "soon" } : row
-  );
+  // the editing row is gone with the feature: the section, its pages and the
+  // marketplace behind it are deleted, so a row wearing a `soon` chip would be
+  // pointing at nothing. this list is the whole rail.
+  const work = studentRows;
 
   // everyone gets the work rows. running the programme adds a second group
   // rather than swapping the first out: an owner posts and edits too.

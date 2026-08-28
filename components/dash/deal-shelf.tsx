@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { deleteDealAsset, recordDealAsset } from "@/app/(dash)/editing/actions";
+import { deleteDealAsset, recordDealAsset } from "@/app/(dash)/deals/actions";
 import { Dropzone } from "@/components/dropzone";
 import { fileFamily, humanSize, type DealAsset } from "@/lib/editing-files";
 

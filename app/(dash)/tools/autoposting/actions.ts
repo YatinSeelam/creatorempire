@@ -9,7 +9,12 @@ import {
   withDefaults,
   type PostOptions,
 } from "@/lib/autopost/plan";
-import { ensureProfile, loadConnections, rowFromPublish } from "@/lib/autopost/server";
+import {
+  ensureProfile,
+  loadConnections,
+  postingProblem,
+  rowFromPublish,
+} from "@/lib/autopost/server";
 import { autopostPrefix } from "@/lib/autopost/source";
 import { VARIATIONS_BUCKET, VARIATIONS_URL_PREFIX } from "@/lib/variations/model";
 import {
@@ -162,8 +167,10 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
   const hashtags = (input.hashtags ?? []).map(normalizeTag).filter(Boolean).slice(0, 30);
   const options = withDefaults(input.options ?? DEFAULT_OPTIONS);
 
-  const profile = await ensureProfile(supabase, user.id, dealId).catch(() => null);
-  if (!profile) return { error: "could not reach the posting service. try again." };
+  const profile = await ensureProfile(supabase, user.id, dealId).catch((err) => err);
+  if (!profile || !("upload_post_username" in profile)) {
+    return { error: postingProblem(profile).toLowerCase() };
+  }
 
   // the plan is a wall clock in the creator's zone; this is where it becomes
   // an instant. see lib/tz.ts for why the zone is a cookie.

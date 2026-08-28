@@ -15,11 +15,6 @@ import {
   type UgcItem,
   type UgcSource,
 } from "@/lib/founder";
-import {
-  EDITING_ENABLED,
-  JOB_STATUS_LABEL,
-  type JobStatus,
-} from "@/lib/editing";
 import { PLATFORMS, type Platform } from "@/lib/deals";
 import { ago, money, shortDate, views as compactViews } from "@/lib/money";
 import { ROLE_LABEL, type OrgRole } from "@/lib/org";
@@ -86,7 +81,7 @@ export default async function AdminPersonPage({
 
   if (!detail) notFound();
 
-  const { person, ugc, ugcHidden, usage, deals, jobs } = detail;
+  const { person, ugc, ugcHidden, usage, deals } = detail;
   const name = personName(person);
   const dealAccountCount = deals.reduce((n, d) => n + d.accounts.length, 0);
 
@@ -139,9 +134,6 @@ export default async function AdminPersonPage({
                 {name}
               </h2>
               {seat && <Pill tone="quiet">{ROLE_LABEL[seat]}</Pill>}
-              {EDITING_ENABLED && detail.editorHandle && (
-                <Pill tone="ink">Editor</Pill>
-              )}
               {detail.subscription && (
                 <Pill tone="line">{detail.subscription.status}</Pill>
               )}
@@ -171,15 +163,6 @@ export default async function AdminPersonPage({
                   {portfolioUrl(person.portfolio_slug)}
                   {person.portfolio_published ? "" : " (unpublished)"}
                 </a>
-              )}
-              {/* the market is off, and /e/<handle> 404s with it */}
-              {EDITING_ENABLED && detail.editorHandle && (
-                <Link
-                  href={`/e/${detail.editorHandle}`}
-                  className="text-ink-70 transition-colors hover:text-flame"
-                >
-                  Editor page
-                </Link>
               )}
             </div>
           </div>
@@ -311,34 +294,6 @@ export default async function AdminPersonPage({
           ))
         )}
       </Panel>
-
-      {/* edit jobs, only when the market is on and there are any */}
-      {EDITING_ENABLED && jobs.length > 0 && (
-        <Panel title={`Edit jobs (${jobs.length})`} padded={false}>
-          {jobs.map((j) => (
-            <Row key={j.id}>
-              <div className="min-w-0 flex-1 py-0.5">
-                <p className="truncate text-[14.5px] font-semibold tracking-[-0.01em]">
-                  {j.title}
-                </p>
-                <p className="mt-0.5 text-[13px] text-ink-50">
-                  {JOB_STATUS_LABEL[j.status as JobStatus] ?? j.status} ·{" "}
-                  {shortDate(j.created_at)}
-                  {j.video_count ? ` · ${j.video_count} videos` : ""}
-                </p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-[15px] font-bold tabular-nums">
-                  {j.pay_cents ? money(j.pay_cents) : "unpaid"}
-                </p>
-                <p className="text-[12.5px] text-ink-50">
-                  {j.pay_kind === "per_video" ? "per video" : "flat"}
-                </p>
-              </div>
-            </Row>
-          ))}
-        </Panel>
-      )}
 
       {/* 4. what they have made */}
       <Panel

@@ -1,8 +1,8 @@
 # creator empire
 
-the creator empire app. one workspace, its own deploy, its own domain, its own supabase project (`xgiifxrxmtyklwglpewb`).
+the creator empire app. one workspace, its own deploy, its own domain (**www.trycreatorempire.com**), its own supabase project (`xgiifxrxmtyklwglpewb`).
 
-what it is: for a student, the dashboard, deals, the scheduler (autoposting) and the editing desk. for whoever runs the programme, the students with what each one costs, and invites, roles and removal. nothing else: no tools shelf, no branding, no billing. a person gets in by holding a seat on the creator empire org, or by being a founder of the platform.
+what it is: for a student, the dashboard, deals, the scheduler (autoposting) and the portfolio. for whoever runs the programme, the students with what each one costs, and invites, roles and removal. nothing else: no tools shelf, no branding, no billing, no editing desk and no editor marketplace (deleted 2026-08-28). a person gets in by holding a seat on the creator empire org, or by being a founder of the platform.
 
 ## run it
 
@@ -21,7 +21,7 @@ open http://localhost:3000. sign in with google. the account has to hold a seat 
 3. environment variables: everything in `.env.example` that you actually use. the three that matter:
    - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`: from the creator empire supabase project.
    - `NEXT_PUBLIC_CE_ORG_ID`: the org's id. `select id from orgs where slug = 'creator-empire'`.
-   - `NEXT_PUBLIC_SITE_URL`: the address this deploy lives at (https://app.creatorempire.com or the vercel url).
+   - `NEXT_PUBLIC_SITE_URL`: the address this deploy lives at. production is `https://www.trycreatorempire.com/`; use `http://localhost:3000` for dev, because the auth cookie's domain is read off this and one scoped to the production apex is refused on localhost.
 4. supabase → authentication → url configuration → redirect urls: add `https://<your domain>/**` (and `http://localhost:3000/**` for dev). without it google sign in bounces to whatever the project's site url is set to.
 5. deploy.
 

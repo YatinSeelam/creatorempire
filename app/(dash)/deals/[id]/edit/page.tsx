@@ -145,17 +145,17 @@ export default async function DealEditPage({
         </FoldPanel>
 
         {/* ------------------------------------------------------------ shelf */}
-        {/* Everything an editor needs on every batch for this brand, uploaded
-            once. It hangs off the deal rather than the job on purpose: the logo
-            and the SOP do not change per batch, and re-uploading them for each
-            one is the friction this removes. */}
+        {/* Everything this brand needs on every cut, uploaded once: the logo,
+            the SOP, the product shots. It hangs off the deal because none of it
+            changes per cut. It was the editor's shelf when this deploy had an
+            editing section; the files outlived it, so it is the brand's now. */}
         <FoldPanel
-          title="Editor shelf"
+          title="Brand shelf"
           action={
             <span className="text-[13px] text-ink-50">
               {shelf.length === 0
                 ? "Nothing on it yet"
-                : `${shelf.length} file${shelf.length === 1 ? "" : "s"} on every batch`}
+                : `${shelf.length} file${shelf.length === 1 ? "" : "s"} on every cut`}
             </span>
           }
         >

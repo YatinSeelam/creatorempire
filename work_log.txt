@@ -1,3 +1,25 @@
+2026-08-28 — editing is deleted, and the product answers on its own domain
+
+editing spent three days behind EDITING_ENABLED, which is the wrong shape for a feature nobody here wants: a flag is a promise to switch something back on. so the section is gone rather than hidden. deleted: app/(dash)/editing/**, the whole /editors marketplace tree, /e/<handle>, app/handoff/**, components/editors/**, and the five dash components only those pages mounted (editing-forms, editing-requests, new-job-wizard, handoff-link, cut-player) plus components/job-files.tsx.
+
+every other door went with it, because a gate on a section is worthless if something still links into it: the rail row, the dashboard's "get an edit" button, its "in edit" tile, the "cuts waiting on you" attention card, the edits series on the activity chart (one bar a day now, centred, where there were two), the edit_jobs read in lib/dash-server.ts and the one in loadPerson, the editor pill and Edit jobs panel on /founder/people/<id>, /editing in the proxy's protected list, and the stripe Connect half of app/api/stripe/webhook — account.updated and STRIPE_CONNECT_WEBHOOK_SECRET existed only to learn an editor's payout account had gone live.
+
+two things outlived the section they were written in. recordDealAsset / deleteDealAsset moved into app/(dash)/deals/actions.ts, because the shelf is a brand's standing files reached from the deal's own edit page; it is titled "Brand shelf" now. and lib/editing-files.ts is load bearing for that shelf, the dropzone and the autoposting source check.
+
+lib/ keeps the rest under the same rule as every other removed feature: a copy from ugc flows has to land cleanly. what is not there any more is EDITING_ENABLED, EDITOR_HIRING_ENABLED and EDITOR_MARKET_ENABLED. bringing editing back means copying the routes over, not flipping a boolean.
+
+the domain: www.trycreatorempire.com is the official address. vercel env, the dns and supabase's Site URL were already pointed at it, so what changed is the code that still named the old one — SITE_URL's production fallback (lib/site-url.ts), brand.domain in lib/content.ts, and the docs in CLAUDE.md and README.md, which still described the prefixed build under ugcflows.com/creatorempire and a session shared with ugc flows. neither is true: bare origin, no prefix, own supabase project, auth cookie widened to .trycreatorempire.com. contactEmail stays on creatorempire.app, which has its own dns and a mailbox; moving a site does not move a mailbox.
+
+one live trap worth writing down: NEXT_PUBLIC_SITE_URL is what lib/supabase/cookie-domain.ts reads the apex off, so a local .env carrying the production origin scopes localhost's cookie to a domain the browser is not on and the sign-in dies with no error. use http://localhost:3000 for dev.
+
+2026-08-28 — connect said "could not reach the posting service" when upload-post was answering fine
+
+the real answer was a 403: "You have reached the limit of 25 profiles for your current plan (professional)", current_profiles 25, profile_limit 25. one managed profile is spent per (creator, deal) and this deploy shares UPLOAD_POST_API_KEY with ugc flows, so all 25 slots are held by ugc flows creators (24 of the 25 have no social_profiles row in xgiifx). every new deal's Connect button therefore fails, and the catch turned the one actionable failure into an outage nobody could act on.
+
+postingProblem() in lib/autopost/server.ts passes an upstream 4xx through and keeps the generic sentence for everything else. wired into connectLink, schedulePost, the resend path (app/(dash)/social/actions.ts) and the batch planner (app/(dash)/tools/autoposting/actions.ts). no behaviour change beyond the words.
+
+the cap itself is not fixable in code: upgrade the upload-post plan, or give this deploy its own upload-post account and key. do NOT delete profiles to free slots, they are ugc flows creators' live connections.
+
 2026-08-28e — editing is shut for everybody now
 
 the founder bypass in app/(dash)/editing/layout.tsx meant the only person who

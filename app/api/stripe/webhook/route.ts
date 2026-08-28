@@ -16,13 +16,6 @@ import { createServiceClient } from "@/lib/supabase/service";
  * to checkout.session.completed, invoice.paid, invoice.payment_failed,
  * customer.subscription.updated and customer.subscription.deleted.
  *
- * SECOND ENDPOINT, for editor payouts. In the dashboard add another endpoint at
- * the SAME url, switch it to "Connected accounts", and subscribe it to
- * account.updated. It gets its own whsec_, which goes in
- * STRIPE_CONNECT_WEBHOOK_SECRET. Without it nothing breaks: an editor's account
- * still goes live, it is just only noticed when they land back on
- * /editors/payouts/stripe rather than the moment stripe verifies them.
- *
  * Until both env vars are set this route answers 500 and nothing is ever
  * marked paid. That is the safe direction to fail in: an account that has
  * paid and shows as unpaid is a support email, the other way round is a
@@ -49,17 +42,12 @@ export async function POST(request: Request) {
   const payload = await request.text();
   const signature = request.headers.get("stripe-signature") ?? "";
 
-  // Connect events come from a SECOND endpoint in the stripe dashboard with its
-  // own whsec_, so one secret cannot verify both. Either is accepted here
-  // rather than forking the route, because everything after this line is the
-  // same: same raw body, same verification, same switch. With
-  // STRIPE_CONNECT_WEBHOOK_SECRET unset, account.updated simply never arrives
-  // and app/editors/payouts/stripe/route.ts stays the only thing that learns an
-  // account went live.
-  const connectSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET;
-  const signed =
-    verify(payload, signature, secret) ||
-    (connectSecret ? verify(payload, signature, connectSecret) : false);
+  // one endpoint, one secret. There was a second one on the same url for
+  // stripe Connect, verified with STRIPE_CONNECT_WEBHOOK_SECRET, which existed
+  // only to learn that an editor's payout account had gone live. Editing is
+  // gone from this deploy and so is that half: the subscription events below
+  // are the whole of what this route is for.
+  const signed = verify(payload, signature, secret);
 
   if (!signed) {
     return NextResponse.json({ error: "bad signature" }, { status: 400 });
@@ -188,40 +176,6 @@ async function handle(event: StripeEvent, supabase: Client) {
       return;
     }
 
-    // an editor's connected account changed: onboarding finished, a document
-    // cleared, or stripe disabled them. This is the only thing that learns
-    // `payouts_enabled` turned true hours after they left the onboarding flow,
-    // and `claim_payout_batch` refuses to hand out an account without it.
-    //
-    // Written straight here rather than through syncStripeAccount() because the
-    // event already carries the whole account object; re-fetching it would be a
-    // round trip to be told what stripe just told us.
-    case "account.updated": {
-      const accountId = str(object.id);
-      if (!accountId) return;
-
-      const capabilities = (object.capabilities ?? {}) as Record<string, unknown>;
-      const requirements = (object.requirements ?? {}) as Record<string, unknown>;
-
-      const { error } = await supabase
-        .from("editor_stripe_accounts")
-        .update({
-          country: str(object.country) ?? null,
-          details_submitted: object.details_submitted === true,
-          payouts_enabled: object.payouts_enabled === true,
-          transfers_active: capabilities.transfers === "active",
-          disabled_reason: str(requirements.disabled_reason) ?? null,
-          requirements_due: Array.isArray(requirements.currently_due)
-            ? requirements.currently_due
-            : [],
-        })
-        .eq("account_id", accountId);
-
-      // an account we have never seen is not an error: the platform's own
-      // account updates fire this too, and it matches nothing.
-      if (error) throw error;
-      return;
-    }
 
     default:
       // everything else is somebody else's problem

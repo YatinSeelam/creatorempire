@@ -327,11 +327,12 @@ export function slugProblem(slug: string): string | null {
  * founder's people page and the page's own canonical tag can never drift apart.
  *
  * The host is READ rather than typed. It was typed once, as
- * `creatorempire.app`, and went stale: that domain is not pointed at this
- * project and resolves to nothing, while the deploy has been served from
- * creatorempire.vercel.app the whole time. So every creator was handed an
+ * `creatorempire.app`, and went stale: that domain was never pointed at this
+ * project, while the deploy answered on its vercel host and then, from
+ * 2026-08-28, on www.trycreatorempire.com. So every creator was handed an
  * address that answers nothing, on the one screen whose entire job is to print
- * an address somebody can open.
+ * an address somebody can open. Reading it off SITE_URL is what made the move
+ * to the real domain a env var and not a hunt through the code.
  *
  * SITE_URL is the same value `metadataBase` is built from in app/layout.tsx, so
  * the address printed on a portfolio and the canonical tag on that portfolio

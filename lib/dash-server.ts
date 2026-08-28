@@ -28,7 +28,6 @@ import {
 } from "@/lib/deals";
 import { addDays, cycleFor, cycleLabel, monthStart, payBy, toDay } from "@/lib/cycles";
 import type { EarningsRange } from "@/lib/earnings-range";
-import { EDITING_ENABLED } from "@/lib/editing";
 import { money, shortDate } from "@/lib/money";
 
 /* -------------------------------------------------------------- shared bits */
@@ -647,14 +646,14 @@ export async function loadEarnings(
 
 /**
  * The rest of what the dashboard shows beside the money: views inside the
- * period, what is connected, what is in flight on the editing and posting
- * sides, a fortnight of activity for the trend, and the short list of things
- * that need a hand. One read, scoped to the books like everything above.
+ * period, what is connected, what is in flight on the posting side, a
+ * fortnight of activity for the trend, and the short list of things that need
+ * a hand. One read, scoped to the books like everything above.
  */
-export type TrendDay = { day: string; edits: number; posts: number };
+export type TrendDay = { day: string; posts: number };
 
 export type Attention = {
-  kind: "accounts" | "review" | "failed" | "payout" | "sync";
+  kind: "accounts" | "failed" | "payout" | "sync";
   title: string;
   line: string;
   href: string;
@@ -667,10 +666,6 @@ export type OverviewData = {
   postedInRange: number;
   /** platforms with a posting login, across every deal on these books. */
   connectedAccounts: number;
-  /** edit jobs still moving: open, in edit, delivered, revisions. */
-  jobsInFlight: number;
-  /** jobs delivered and waiting on the creator to approve or send back. */
-  jobsAwaitingReview: number;
   /** autoposts created inside the window that are queued or already out. */
   postsInRange: number;
   postsQueued: number;
@@ -744,19 +739,13 @@ export async function loadOverview(
       .filter(...onBooks(scope, "deal.org_id"))
       .in("status", statuses);
 
-  const [stats, posted, profiles, jobs, social, queued, failed] = await Promise.all([
+  const [stats, posted, profiles, social, queued, failed] = await Promise.all([
     statsQ,
     postedQ,
     supabase
       .from("social_profiles")
       .select("deal_id, connected, deal:deals!inner(org_id)")
       .filter(...onBooks(scope, "deal.org_id")),
-    user
-      ? supabase
-          .from("edit_jobs")
-          .select("id, status, created_at, deal_id, deal:deals(org_id)")
-          .eq("user_id", user.id)
-      : Promise.resolve({ data: [] as unknown[] }),
     socialQ,
     liveCount(["scheduled", "processing"]),
     liveCount(["failed"]),
@@ -809,17 +798,6 @@ export async function loadOverview(
     ).length;
   }
 
-  const jobRows = ((jobs.data ?? []) as {
-    id: string;
-    status: string;
-    created_at: string;
-    deal_id: string | null;
-    deal: { org_id: string | null } | null;
-  }[]).filter((j) => !j.deal_id || (j.deal?.org_id ?? null) === scope.orgId);
-  const inFlight = new Set(["open", "claimed", "delivered", "revisions"]);
-  const jobsInFlight = jobRows.filter((j) => inFlight.has(j.status)).length;
-  const jobsAwaitingReview = jobRows.filter((j) => j.status === "delivered").length;
-
   const socialRows = (social.data ?? []) as {
     id: string;
     deal_id: string | null;
@@ -837,12 +815,8 @@ export async function loadOverview(
   // the fortnight, one bucket a day, filled from zero so the chart has a bar
   // for every day whether or not anything happened on it
   const trend: TrendDay[] = [];
-  for (let i = 13; i >= 0; i--) trend.push({ day: addDays(today, -i), edits: 0, posts: 0 });
+  for (let i = 13; i >= 0; i--) trend.push({ day: addDays(today, -i), posts: 0 });
   const bucket = new Map(trend.map((t) => [t.day, t]));
-  for (const j of jobRows) {
-    const d = bucket.get(j.created_at.slice(0, 10));
-    if (d) d.edits += 1;
-  }
   for (const p of socialRows) {
     if (p.status === "canceled") continue;
     const d = bucket.get(p.created_at.slice(0, 10));
@@ -859,17 +833,6 @@ export async function loadOverview(
       title: `${r.brand.name} has no tracked account`,
       line: "add a handle or connect a login so views start counting",
       href: `/deals/${r.deal.id}/edit`,
-    });
-  }
-  // EDITING_ENABLED gates the card, not just the count. with editing off the
-  // count is only ever 0 anyway, but a row that can point at a coming-soon
-  // page should not be constructible in the first place.
-  if (EDITING_ENABLED && jobsAwaitingReview > 0) {
-    attention.push({
-      kind: "review",
-      title: `${jobsAwaitingReview} cut${jobsAwaitingReview === 1 ? "" : "s"} waiting on you`,
-      line: "the cut is filed. approve it or send it back to your editor",
-      href: "/editing",
     });
   }
   if (postsFailed > 0) {
@@ -899,8 +862,6 @@ export async function loadOverview(
     // before it truncates a `count: exact` header.
     postedInRange: posted.count ?? posted.data?.length ?? 0,
     connectedAccounts,
-    jobsInFlight,
-    jobsAwaitingReview,
     postsInRange,
     postsQueued,
     postsFailed,

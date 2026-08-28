@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import {
   connectUrl,
   ensureProfile,
+  postingProblem,
   rowFromPublish,
   type ConnectOrigin,
 } from "@/lib/autopost/server";
@@ -159,10 +160,11 @@ export async function connectLink(
 
   try {
     return { url: await connectUrl(supabase, user.id, id, from) };
-  } catch {
-    // most likely the key is missing or upstream is down. the panel's own
-    // banner explains the former; one sentence covers both.
-    return { error: "Could not reach the posting service. Try again." };
+  } catch (err) {
+    // the key being missing or upstream being down is one sentence, but a 4xx
+    // is upstream telling the creator something they can act on — the profile
+    // cap being the one that actually fires — so it is passed through.
+    return { error: postingProblem(err) };
   }
 }
 
@@ -216,8 +218,10 @@ export async function schedulePost(_prev: PostState, formData: FormData): Promis
     scheduledDate = when.toISOString();
   }
 
-  const profile = await ensureProfile(supabase, user.id, dealId).catch(() => null);
-  if (!profile) return { error: "Could not reach the posting service. Try again." };
+  const profile = await ensureProfile(supabase, user.id, dealId).catch((err) => err);
+  if (!profile || !("upload_post_username" in profile)) {
+    return { error: postingProblem(profile) };
+  }
 
   // the composer only renders this field in the one state that needs it, so a
   // value here is a deliberate answer to a question we asked.
@@ -405,8 +409,12 @@ export async function editPost(_state: PostState, formData: FormData): Promise<P
     };
   }
 
-  const profile = await ensureProfile(supabase, user.id, post.deal_id as string).catch(() => null);
-  if (!profile) return { error: "Could not reach the posting service. Try again." };
+  const profile = await ensureProfile(supabase, user.id, post.deal_id as string).catch(
+    (err) => err
+  );
+  if (!profile || !("upload_post_username" in profile)) {
+    return { error: postingProblem(profile) };
+  }
 
   try {
     // false is their 404: nothing left to cancel. the row is scheduled and the

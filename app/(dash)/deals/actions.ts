@@ -1020,3 +1020,71 @@ export async function deletePayout(formData: FormData): Promise<void> {
   await supabase.from("payouts").delete().eq("id", id);
   if (dealId) revalidatePath(`/deals/${dealId}`, "layout");
 }
+
+/* ----------------------------------------------------------- the deal shelf */
+
+/**
+ * The brand's shelf: the SOP, the guidelines, the logo, the product shots.
+ *
+ * These two writes lived in the editing section's action file, because the
+ * shelf was read by whoever was cutting. Editing is gone and the shelf is not:
+ * it is a brand's standing files, hanging off the deal, and it is reached from
+ * the deal's own edit page. So it moved here, where every other deal write
+ * already lives, rather than dying with the section it was first written for.
+ */
+export async function recordDealAsset(input: {
+  dealId: string;
+  kind: string;
+  path: string;
+  name: string;
+  mime: string;
+  size: number;
+}): Promise<{ error?: string }> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "Your session expired. Sign in again." };
+
+  const dealId = String(input.dealId ?? "").slice(0, 40);
+  const path = String(input.path ?? "").slice(0, 300);
+  const kind = String(input.kind ?? "") === "doc" ? "doc" : "asset";
+  // the path is minted by the uploader and arrives from the browser, so it is
+  // checked against the deal it claims rather than trusted.
+  if (!dealId || !path.startsWith(`bank/${dealId}/`)) {
+    return { error: "That upload does not belong to this deal." };
+  }
+
+  const { error } = await supabase.from("deal_assets").insert({
+    user_id: user.id,
+    deal_id: dealId,
+    kind,
+    path,
+    name: String(input.name ?? "").slice(0, 200) || "file",
+    mime: String(input.mime ?? "").slice(0, 100) || null,
+    size_bytes: Number.isFinite(input.size) ? Math.max(0, Math.round(input.size)) : null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/deals/${dealId}/edit`);
+  return {};
+}
+
+/** Off the shelf and out of the bucket. Object first, row second: an orphan
+ *  object is invisible, an orphan row is a dead link. RLS scopes both. */
+export async function deleteDealAsset(formData: FormData): Promise<void> {
+  const { supabase, user } = await authed();
+  if (!user) return;
+
+  const assetId = text(formData.get("asset_id"), 40);
+  if (!assetId) return;
+
+  const { data: asset } = await supabase
+    .from("deal_assets")
+    .select("id, path, deal_id")
+    .eq("id", assetId)
+    .maybeSingle();
+  if (!asset) return;
+
+  await supabase.storage.from("editing-assets").remove([asset.path]);
+  await supabase.from("deal_assets").delete().eq("id", assetId);
+
+  revalidatePath(`/deals/${asset.deal_id}/edit`);
+}

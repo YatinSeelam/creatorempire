@@ -24,11 +24,10 @@ const PATH_HEADER = "x-pathname";
  * but it is turned away one render later and without the `?next=` that brings
  * them back to where they were going.
  *
- * `/editing` and `/editors` are deliberately absent while EDITING_ENABLED in
- * lib/editing.ts is false: their layouts 404 before doing anything, and a
- * protected entry would bounce a stranger to a login page for a group that is
- * not there, which is louder than the 404. Put both back when the flag flips.
- * The flag is not imported here because this runs on every single request.
+ * `/editing`, `/editors` and `/handoff` are gone from this list because the
+ * routes themselves are gone: editing was deleted from this deploy on
+ * 2026-08-28, so those paths are ordinary 404s now and guarding them would
+ * bounce a stranger to a login page for a section that does not exist.
  */
 /**
  * Is this path inside one of the protected trees?
@@ -54,7 +53,6 @@ const PROTECTED = [
   "/flow",
   "/founder",
   "/join",
-  "/editing",
   "/notifications",
 ];
 

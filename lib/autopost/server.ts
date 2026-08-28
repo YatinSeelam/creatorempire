@@ -20,6 +20,7 @@ import {
   getJobStatus,
   getProfile,
   listFacebookPages,
+  UploadPostError,
   whiteLabelLink,
   type AutopostPlatform,
   type FacebookPage,
@@ -150,6 +151,23 @@ export async function connectUrl(
     `${site}${connectReturnPath(origin, dealId)}`,
     await apiKey("upload_post", userId)
   );
+}
+
+/**
+ * What to tell a creator when the profile could not be made or reached.
+ *
+ * "Could not reach the posting service" is the right sentence for a timeout
+ * and a lie for the failure that actually happens: Upload-Post caps managed
+ * profiles per plan, one profile is spent per (creator, deal), and the answer
+ * at the cap is a 403 saying so in plain english. Swallowing it left the only
+ * fixable failure looking like an outage nobody could act on, so an upstream
+ * 4xx is passed through and everything else keeps the generic line.
+ */
+export function postingProblem(err: unknown): string {
+  if (err instanceof UploadPostError && err.status >= 400 && err.status < 500) {
+    return err.message;
+  }
+  return "Could not reach the posting service. Try again.";
 }
 
 /**

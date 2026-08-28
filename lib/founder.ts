@@ -102,16 +102,6 @@ export type PersonDeal = {
   accounts: DealAccountRef[];
 };
 
-export type PersonJob = {
-  id: string;
-  title: string;
-  status: string;
-  pay_cents: number | null;
-  pay_kind: string | null;
-  video_count: number | null;
-  created_at: string;
-};
-
 /**
  * What one person's product usage adds up to, one group per thing that costs
  * or produces something. Every dollar figure is micro-dollars, priced by the
@@ -137,10 +127,7 @@ export type PersonDetail = {
   ugcHidden: number;
   usage: PersonUsage;
   deals: PersonDeal[];
-  jobs: PersonJob[];
   subscription: { status: string; current_period_end: string | null } | null;
-  /** the editor profile, when this person is also an editor. */
-  editorHandle: string | null;
 };
 
 /** How much of somebody's back catalogue one page prints. */
@@ -364,10 +351,8 @@ export async function loadPerson(userId: string): Promise<PersonDetail | null> {
     { data: deals },
     { data: dealAccounts },
     { count: targetCount },
-    { data: jobs },
     { count: callCount },
     { data: subscription },
-    { data: editor },
     { data: flowRows },
     { count: emailCount },
     { data: emailAccounts },
@@ -413,23 +398,12 @@ export async function loadPerson(userId: string): Promise<PersonDetail | null> {
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId),
     supabase
-      .from("edit_jobs")
-      .select("id, title, status, pay_cents, pay_kind, video_count, created_at")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false })
-      .limit(20),
-    supabase
       .from("api_usage_events")
       .select("id", { count: "exact", head: true })
       .eq("user_id", userId),
     supabase
       .from("subscriptions")
       .select("status, current_period_end")
-      .eq("user_id", userId)
-      .maybeSingle(),
-    supabase
-      .from("editors")
-      .select("handle")
       .eq("user_id", userId)
       .maybeSingle(),
     supabase
@@ -589,9 +563,7 @@ export async function loadPerson(userId: string): Promise<PersonDetail | null> {
         accounts: accountsByDeal.get(d.id) ?? [],
       };
     }),
-    jobs: (jobs ?? []) as PersonJob[],
     subscription: subscription ?? null,
-    editorHandle: editor?.handle ?? null,
   };
 }
 

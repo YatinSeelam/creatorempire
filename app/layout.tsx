@@ -32,7 +32,7 @@ const siteUrl = SITE_URL;
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: brand.name,
-  description: `${brand.name} runs brand deals, the money, the posting and the editing in one place.`,
+  description: `${brand.name} runs brand deals, the money and the posting in one place.`,
   applicationName: brand.name,
   robots: { index: false, follow: false, nocache: true },
   openGraph: {

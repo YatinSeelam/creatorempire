@@ -17,7 +17,6 @@ import {
   type TrendDay,
 } from "@/lib/dash-server";
 import { asDay, toRange } from "@/lib/earnings-range";
-import { EDITING_ENABLED } from "@/lib/editing";
 import {
   PLATFORMS,
   PLATFORM_LABEL,
@@ -102,7 +101,7 @@ export default async function DashboardPage({
   const span = earnings.from
     ? `${shortDate(earnings.from)} to ${shortDate(earnings.to)}`
     : `everything to ${shortDate(earnings.to)}`;
-  const hasTrend = overview.trend.some((d) => d.edits > 0 || d.posts > 0);
+  const hasTrend = overview.trend.some((d) => d.posts > 0);
   const totalAccounts = PLATFORMS.reduce((n, p) => n + (data.accountsByPlatform[p] ?? 0), 0);
   const topVideos = [...data.recentVideos].sort((a, b) => b.views - a.views).slice(0, 5);
 
@@ -120,14 +119,6 @@ export default async function DashboardPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <RangePicker active={range} from={earnings.from} to={earnings.to} />
-          {/* "get an edit" is gone while EDITING_ENABLED is off. a primary
-              action on the busiest screen in the product that lands on a
-              coming-soon page is worse than no action at all. */}
-          {EDITING_ENABLED && (
-            <Link href="/editing/new" className={ghost}>
-              get an edit
-            </Link>
-          )}
           <Link href="/tools/autoposting" className={ghost}>
             new post
           </Link>
@@ -161,8 +152,8 @@ export default async function DashboardPage({
           answer, so it sits above the window-filtered numbers. */}
       <MonthPanel outlook={earnings.outlook} months={earnings.months} />
 
-      {/* the four numbers */}
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {/* the three numbers */}
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <Tile
           label="earned"
           value={money(earnings.totalCents)}
@@ -188,17 +179,6 @@ export default async function DashboardPage({
           icon="calendar"
           tone="bg-shell text-ink"
         />
-        <Tile
-          label="in edit"
-          value={String(overview.jobsInFlight)}
-          note={
-            overview.jobsAwaitingReview > 0
-              ? `${overview.jobsAwaitingReview} waiting on you`
-              : "edit requests in flight"
-          }
-          icon="clock"
-          tone="bg-shell text-ink"
-        />
       </div>
 
       {/* activity beside the platform split */}
@@ -206,20 +186,15 @@ export default async function DashboardPage({
         <Card
           title="activity"
           right={
-            <span className="flex items-center gap-3 text-[11.5px] font-medium text-ink-50">
-              <span className="flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-live" /> edits
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-flame" /> posts
-              </span>
+            <span className="flex items-center gap-1.5 text-[11.5px] font-medium text-ink-50">
+              <span className="size-1.5 rounded-full bg-flame" /> posts
             </span>
           }
         >
           {hasTrend ? (
             <TrendChart days={overview.trend} />
           ) : (
-            <Blank>no activity in the last 14 days. schedule a post or send an edit and it shows here.</Blank>
+            <Blank>no activity in the last 14 days. schedule a post and it shows here.</Blank>
           )}
         </Card>
 
@@ -717,7 +692,7 @@ function AttentionRow({ item }: { item: Attention }) {
     >
       <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-shell text-ink-50">
         <Glyph
-          name={item.kind === "payout" ? "money" : item.kind === "review" ? "clock" : "deal"}
+          name={item.kind === "payout" ? "money" : "deal"}
           className="size-3.5"
         />
       </span>
@@ -761,17 +736,18 @@ function VideoRow({ rank, video }: { rank: number; video: FeedVideo }) {
   );
 }
 
-/** fourteen days, two bars a day. plain svg: two series and a baseline is not a charting problem. */
+/** fourteen days, one bar a day. plain svg: one series and a baseline is not a
+ *  charting problem. it was two until editing came off the product — the bar is
+ *  centred in its slot now rather than left where the pair used to sit. */
 function TrendChart({ days }: { days: TrendDay[] }) {
   const W = 560;
   const H = 170;
   const padX = 8;
   const padTop = 12;
   const padBottom = 24;
-  const max = Math.max(1, ...days.map((d) => Math.max(d.edits, d.posts)));
+  const max = Math.max(1, ...days.map((d) => d.posts));
   const slot = (W - padX * 2) / days.length;
-  const bar = Math.min(12, slot * 0.32);
-  const gap = 3;
+  const bar = Math.min(14, slot * 0.4);
   const plotH = H - padTop - padBottom;
   const y = (n: number) => padTop + plotH - (n / max) * plotH;
 
@@ -781,7 +757,7 @@ function TrendChart({ days }: { days: TrendDay[] }) {
         viewBox={`0 0 ${W} ${H}`}
         className="h-auto w-full min-w-[420px]"
         role="img"
-        aria-label="edit requests and scheduled posts per day, last 14 days"
+        aria-label="scheduled posts per day, last 14 days"
       >
         {[0, 0.5, 1].map((t) => (
           <line
@@ -805,15 +781,7 @@ function TrendChart({ days }: { days: TrendDay[] }) {
           return (
             <g key={d.day}>
               <rect
-                x={cx - bar - gap / 2}
-                y={y(d.edits)}
-                width={bar}
-                height={padTop + plotH - y(d.edits)}
-                rx="2"
-                className="fill-live"
-              />
-              <rect
-                x={cx + gap / 2}
+                x={cx - bar / 2}
                 y={y(d.posts)}
                 width={bar}
                 height={padTop + plotH - y(d.posts)}
