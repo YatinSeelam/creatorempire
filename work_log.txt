@@ -1,3 +1,38 @@
+2026-08-28c — production was pointed at the dead project too
+
+reading the deployed bundle answered it without any credentials: NEXT_PUBLIC_*
+values are inlined at build time, so creatorempire.vercel.app was visibly
+carrying supabase ref xgiifxrxmtyklwglpewb and publishable key ...whV2rz, the
+same dead pair the local .env had. sign in could not work: that project holds a
+different orgs row and none of the data.
+
+vercel's env was also missing SUPABASE_SECRET_KEY and CRON_SECRET entirely, so
+production had no service client (no bell, no ledger, cron would 503) and no
+way for vercel cron to authenticate, and it carried APIFY_API_KEY, a name
+nothing in the code reads. all fourteen vars are now set on production and
+preview from the corrected .env, APIFY_API_KEY is gone, and RESEND_API_KEY and
+ADMIN_ALERT_EMAIL are set so the background refresh can report.
+
+NEXT_PUBLIC_SITE_URL is the one value that is not the local one:
+https://creatorempire.vercel.app, a bare origin, so BASE_PATH is "" and the app
+serves at the root of its own host. that made vercel.json's cron path wrong,
+since it still carried /creatorempire in front of the route. fixed, and worth
+remembering: a cron path that misses is a queue nobody drains and it fails
+silently.
+
+redeployed rather than redeploy-ing, because NEXT_PUBLIC_* are baked at build
+time and reusing the artifact would have kept the dead project. verified after:
+the bundle now carries qtcwdvaoxrfojzaktwyg and ...in4oUL, and the production
+cron answers 200 with a real credit balance, which only a working service key
+can read.
+
+still open: whether https://creatorempire.vercel.app/auth/callback is on the
+supabase project's redirect allow list. it cannot be checked from outside,
+/auth/v1/authorize hands every redirect_to to google and substitutes the site
+url later, so a missing entry looks exactly like a working one until the round
+trip lands back on /login.
+
+
 2026-08-28b — the other half of the env fix
 
 the first pass swapped NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY onto
