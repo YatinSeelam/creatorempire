@@ -30,6 +30,18 @@ const PATH_HEADER = "x-pathname";
  * not there, which is louder than the 404. Put both back when the flag flips.
  * The flag is not imported here because this runs on every single request.
  */
+/**
+ * Is this path inside one of the protected trees?
+ *
+ * On the segment boundary, never on the raw prefix. This deploy serves a
+ * creator's portfolio off a single path segment now, so a plain `startsWith`
+ * sends the owner of `deals-with-jess` or `social-proof` to a login page for a
+ * public page that has no login.
+ */
+function covers(list: readonly string[], path: string): boolean {
+  return list.some((p) => path === p || path.startsWith(`${p}/`));
+}
+
 const PROTECTED = [
   "/account",
   "/dashboard",
@@ -290,7 +302,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url, 308);
   }
 
-  if (!user && PROTECTED.some((p) => pathname.startsWith(p))) {
+  if (!user && covers(PROTECTED, pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = `?next=${encodeURIComponent(pathname)}`;

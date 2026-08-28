@@ -279,6 +279,10 @@ export const RESERVED_SLUGS = new Set([
   // the dynamic one in next's matcher anyway, so this only stops a creator
   // claiming a link that would never resolve to their page.
   "editors", "e", "join", "r", "sitemap.xml", "robots.txt", "llms.txt", "og.png",
+  // the rest of this deploy's own first segments. a route group adds no path
+  // segment, so (dash)'s children and /<slug> are siblings.
+  "agency", "deals", "editing", "notifications", "handoff", "review", "account",
+  "auth", "scheduler",
 ]);
 
 /** Whatever they type becomes a usable path segment as they type it. */

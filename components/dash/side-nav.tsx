@@ -88,6 +88,14 @@ const FounderIcon = (
   </>
 );
 
+const PortfolioIcon = (
+  <>
+    <rect x="3" y="6.5" width="18" height="13.5" rx="2.5" />
+    <path d="M9 6.5V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1.5" />
+    <path d="M3 12h18" />
+  </>
+);
+
 const SettingsIcon = (
   <>
     <circle cx="12" cy="12" r="3" />
@@ -108,6 +116,7 @@ const studentRows: NavRow[] = [
   { href: "/deals", label: "Deals", icon: DealsIcon },
   { href: "/tools/autoposting", label: "Scheduler", icon: SchedulerIcon },
   { href: "/editing", label: "Editing", icon: EditingIcon },
+  { href: "/portfolio", label: "Portfolio", icon: PortfolioIcon },
 ];
 
 const adminRows: NavRow[] = [
