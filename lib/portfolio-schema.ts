@@ -125,15 +125,26 @@ export type PortfolioTheme = {
   surface: SurfaceKey;
 };
 
+/**
+ * The palette, with the programme's own colour first.
+ *
+ * It used to lead with `#ec5a29` under the comment "the product's own", which
+ * was true of ugc flows and false here — this file is a copy, and the copy kept
+ * the other product's brand. So every creator empire portfolio was built in an
+ * orange nobody chose, on a deploy whose entire identity is navy.
+ *
+ * The rest are left alone: a palette is a palette, and a creator who wants a
+ * warm page should have one. Only the default and the order changed.
+ */
 export const ACCENT_PRESETS = [
-  "#ec5a29", // flame, the product's own
-  "#c2410c", // rust
-  "#b45309", // amber
-  "#166534", // forest
-  "#0f766e", // teal
+  "#00008b", // navy, the programme's own
   "#1d4ed8", // cobalt
+  "#0f766e", // teal
+  "#166534", // forest
   "#6d28d9", // violet
   "#be123c", // rose
+  "#c2410c", // rust
+  "#b45309", // amber
   "#101010", // ink
 ] as const;
 
@@ -154,8 +165,13 @@ export const SURFACES = [
 
 export type SurfaceKey = (typeof SURFACES)[number]["key"];
 
+/**
+ * What a portfolio looks like before anybody touches it: navy on white, black
+ * type. `paper` was already the default surface, so this is the accent only —
+ * the one value that was still ugc flows' rather than this programme's.
+ */
 export const DEFAULT_THEME: PortfolioTheme = {
-  accent: "#ec5a29",
+  accent: "#00008b",
   font: "raleway",
   surface: "paper",
 };
