@@ -20,10 +20,12 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { capBytes } from "@/lib/upload-limits";
 
 const BUCKET = "portfolio";
+
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 60 * 1024 * 1024;
+const MAX_VIDEO_BYTES = capBytes(60 * 1024 * 1024);
 
 /** a year. these files are immutable - a new upload gets a new name. */
 const CACHE_CONTROL = "31536000";
@@ -286,7 +288,9 @@ export async function uploadClip(
     throw new Error("Pick a video file.");
   }
   if (file.size > MAX_VIDEO_BYTES) {
-    throw new Error("Clips have to be under 60MB.");
+    throw new Error(
+      `Clips have to be under ${Math.floor(MAX_VIDEO_BYTES / (1024 * 1024))}MB.`
+    );
   }
 
   onProgress?.(0);

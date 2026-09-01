@@ -24,6 +24,7 @@ import {
   type PostOptions,
 } from "@/lib/autopost/plan";
 import { MAX_CAPTION } from "@/lib/autopost/limits";
+import { MAX_UPLOAD_MB } from "@/lib/upload-limits";
 import { PLATFORMS, PLATFORM_LABEL, type Platform } from "@/lib/deals";
 import { PLATFORM_COLOR } from "@/lib/autopost/plan";
 import { Picker } from "@/components/dash/form";
@@ -1793,7 +1794,7 @@ function UploadBox({
             drop cuts here
           </p>
           <p className="mt-0.5 text-[12px] text-ink-50">
-            mp4 up to 200mb
+            mp4 up to {MAX_UPLOAD_MB}mb
           </p>
           <button
             type="button"

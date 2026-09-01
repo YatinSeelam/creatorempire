@@ -21,6 +21,7 @@
  */
 
 import { createClient } from "@/lib/supabase/client";
+import { MAX_UPLOAD_MB } from "@/lib/upload-limits";
 
 const CACHE_CONTROL = "31536000";
 
@@ -57,7 +58,7 @@ export function putWithProgress(args: {
       reject(
         new Error(
           /exceeded the maximum allowed size/i.test(xhr.responseText)
-            ? "that file is too large"
+            ? `that file is too large. the limit is ${MAX_UPLOAD_MB}mb.`
             : xhr.status === 401 || xhr.status === 403
               ? "your session expired. reload and try again."
               : "upload failed. check your connection."

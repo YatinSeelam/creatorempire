@@ -14,9 +14,9 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { putWithProgress } from "@/lib/storage-upload";
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "@/lib/upload-limits";
 
 const BUCKET = "autopost";
-const MAX_BYTES = 200 * 1024 * 1024;
 
 export async function uploadAutopostVideo(
   file: File,
@@ -26,8 +26,10 @@ export async function uploadAutopostVideo(
   if (!file.type.startsWith("video/")) {
     throw new Error("That is not a video file.");
   }
-  if (file.size > MAX_BYTES) {
-    throw new Error("That video is over 200MB. Export a smaller cut.");
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error(
+      `That video is over ${MAX_UPLOAD_MB}MB. Export a smaller cut.`
+    );
   }
 
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "mp4";

@@ -1,3 +1,11 @@
+2026-09-01 — the scheduler's 200mb was a number storage never agreed to
+
+michael dropped a 57mb cut into the scheduler and got "that file is too large" under a label reading "mp4 up to 200mb". both numbers were ours and neither was true. supabase enforces a project-wide upload ceiling in FRONT of every bucket, and a bucket's own file_size_limit only ever narrows it further, never widens it. `autopost` is set to 200mb; this project's ceiling is 50mb, so the storage api refuses anything over 50mb and answers "The object exceeded the maximum allowed size", which lib/storage-upload.ts turns into "that file is too large". measured against the live project, not guessed: 50 mib uploads 200, 52 mib comes back 413 EntityTooLarge. every clip in the autopost bucket today is under 9mb, which is why nobody hit it until now.
+
+so the ceiling lives in one place, lib/upload-limits.ts, read from NEXT_PUBLIC_MAX_UPLOAD_MB and defaulting to 50 because 50 is the truth on this project. the composer's label, the client side size check in lib/autopost/upload.ts, the 413 message in lib/storage-upload.ts and portfolio's video cap all read that one value now, so they cannot drift apart again. portfolio was promising 60mb, which was ten over what storage would take; capBytes() clamps a per-feature cap to whatever storage will actually accept.
+
+this makes the app honest, it does not make 57mb upload. the only thing that does is raising the ceiling in supabase (storage > settings > upload file size limit), which past 50mb needs a paid plan on the project. after that it is one env var here: NEXT_PUBLIC_MAX_UPLOAD_MB=200 and the label, the check and the error all move together.
+
 2026-08-28 — editing is deleted, and the product answers on its own domain
 
 editing spent three days behind EDITING_ENABLED, which is the wrong shape for a feature nobody here wants: a flag is a promise to switch something back on. so the section is gone rather than hidden. deleted: app/(dash)/editing/**, the whole /editors marketplace tree, /e/<handle>, app/handoff/**, components/editors/**, and the five dash components only those pages mounted (editing-forms, editing-requests, new-job-wizard, handoff-link, cut-player) plus components/job-files.tsx.
