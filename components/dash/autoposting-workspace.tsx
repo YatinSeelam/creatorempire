@@ -13,11 +13,14 @@ import {
   DOW,
   addDays,
   dayKey,
+  fromTimeInput,
   isLive,
   parseDay,
   startOfWeek,
+  toTimeInput,
   type AutopostWorkspaceView,
   type DealCard,
+  type ScheduledPost,
 } from "@/lib/autopost/plan";
 import { PLATFORMS, PLATFORM_LABEL } from "@/lib/deals";
 
@@ -55,6 +58,7 @@ export function AutopostingWorkspace({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<{ msg: string; bad?: boolean } | null>(null);
+  const [editing, setEditing] = useState<ScheduledPost | null>(null);
   const [, startTransition] = useTransition();
 
   // remounts the wizard after a batch lands, so a second batch starts clean
@@ -379,10 +383,37 @@ export function AutopostingWorkspace({
                   router.refresh();
                 });
               }}
+              onOpen={(p) => isLive(p.status) && setEditing(p)}
             />
           )}
         </div>
       </div>
+
+      {editing && (
+        <PostSheet
+          post={editing}
+          todayKey={todayKey}
+          onClose={() => setEditing(null)}
+          onSave={(day, min) => {
+            const id = editing.id;
+            setEditing(null);
+            startTransition(async () => {
+              const res = await movePost(id, day, min);
+              say(res.error ?? res.ok ?? "moved.", Boolean(res.error));
+              router.refresh();
+            });
+          }}
+          onDrop={() => {
+            const id = editing.id;
+            setEditing(null);
+            startTransition(async () => {
+              const res = await dropPost(id);
+              say(res.error ?? res.ok ?? "cancelled.", Boolean(res.error));
+              router.refresh();
+            });
+          }}
+        />
+      )}
 
       {toast && (
         <div
@@ -393,6 +424,155 @@ export function AutopostingWorkspace({
           {toast.msg}
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * One scheduled post, opened off the calendar: move it, or take it off.
+ *
+ * Cancelling is the half the calendar could never do. A drag can only ever say
+ * "later", and a student who no longer wants a post going out had nothing to
+ * press. `dropPost` cancels upstream at upload-post first and keeps the row as
+ * `canceled`, so the record stays honest rather than the post quietly vanishing
+ * from a list the platform still holds. It asks twice, because it is not
+ * undoable: rescheduling a cancelled post means building the batch again.
+ */
+function PostSheet({
+  post,
+  todayKey,
+  onClose,
+  onSave,
+  onDrop,
+}: {
+  post: ScheduledPost;
+  todayKey: string;
+  onClose: () => void;
+  onSave: (day: string, min: number) => void;
+  onDrop: () => void;
+}) {
+  const [day, setDay] = useState(post.day);
+  const [time, setTime] = useState(toTimeInput(post.min));
+  const [confirm, setConfirm] = useState(false);
+  const min = fromTimeInput(time);
+  const unchanged = day === post.day && min === post.min;
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="close"
+        onClick={onClose}
+        className="fixed inset-0 z-40 cursor-default bg-ink/25"
+      />
+      <div className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[440px] rounded-t-2xl border border-line bg-paper p-5 shadow-[0_-12px_40px_-24px_rgb(16_16_16/0.5)] sm:inset-y-0 sm:left-auto sm:right-0 sm:my-auto sm:mr-5 sm:h-fit sm:rounded-2xl">
+        <div className="mb-4">
+          <div className="text-[15px] font-extrabold tracking-[-0.01em]">move post</div>
+          <div className="mt-0.5 truncate text-[12.5px] text-ink-50">
+            {post.videoName ?? (post.caption.slice(0, 60) || "scheduled post")}
+          </div>
+        </div>
+
+        <form
+          className="grid gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!day || !time) return;
+            onSave(day, min);
+          }}
+        >
+          <div className="flex items-center gap-2">
+            {post.platforms.map((pf) => (
+              <PlatformGlyph key={pf} platform={pf} className="h-4 w-4" />
+            ))}
+            <span className="text-[12.5px] text-ink-50">
+              {post.platforms.map((pf) => PLATFORM_LABEL[pf]).join(", ")}
+            </span>
+          </div>
+
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-50">
+              date
+            </span>
+            <input
+              type="date"
+              value={day}
+              min={todayKey}
+              required
+              onChange={(e) => setDay(e.target.value)}
+              className="rounded-pill border border-line bg-paper px-3 py-2 text-[13px] font-semibold outline-none focus:border-flame"
+            />
+          </label>
+
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-50">
+              time
+            </span>
+            <input
+              type="time"
+              value={time}
+              required
+              onChange={(e) => setTime(e.target.value)}
+              className="rounded-pill border border-line bg-paper px-3 py-2 text-[13px] font-semibold outline-none focus:border-flame"
+            />
+          </label>
+
+          <p className="text-[12.5px] text-ink-50">
+            in your own timezone. a minute from now is as close as it goes.
+          </p>
+
+          <div className="mt-2 flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-pill px-4 py-2 text-[13px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
+            >
+              close
+            </button>
+            <button
+              type="submit"
+              disabled={unchanged}
+              className="rounded-pill bg-ink px-4 py-2 text-[13px] font-bold text-paper disabled:opacity-40"
+            >
+              move it
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-4 border-t border-line pt-4">
+          {confirm ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12.5px] text-ink-50">
+                it will not go out. you cannot undo this.
+              </span>
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirm(false)}
+                  className="rounded-pill px-3 py-2 text-[13px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
+                >
+                  keep it
+                </button>
+                <button
+                  type="button"
+                  onClick={onDrop}
+                  className="rounded-pill bg-flame-dark px-4 py-2 text-[13px] font-bold text-on-accent"
+                >
+                  yes, cancel it
+                </button>
+              </span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirm(true)}
+              className="text-[13px] font-bold text-flame-dark hover:underline"
+            >
+              take it off the schedule
+            </button>
+          )}
+        </div>
+      </div>
     </>
   );
 }

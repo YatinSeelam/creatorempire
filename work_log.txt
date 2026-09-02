@@ -1,3 +1,23 @@
+2026-09-02 — a student can take a scheduled post off the schedule
+
+dropPost has existed in app/(dash)/tools/autoposting/actions.ts since the tool
+shipped, and the workspace imported it, but nothing ever called it: clicking a
+card on the autopost calendar did nothing, so the only move a student had was
+dragging the post to a later day. Cancelling a post they no longer wanted was
+not expressible anywhere in the ui.
+
+components/dash/autoposting-workspace.tsx now holds `editing` state, passes
+onOpen to AutopostCalendar (live posts only, the prop was already there and
+unused) and renders PostSheet: date, time, and "take it off the schedule" under
+a hairline. It asks twice, because it is not undoable — dropPost cancels the job
+upstream at upload-post first and keeps the row as `canceled` rather than
+deleting it, so the record stays honest and a post that has already gone out is
+never pretended away. A terminal row is still only a row, so that one is deleted
+and the sheet never opens on it.
+
+No server change, no migration. The sheet carries its own overlay (bottom sheet
+on a phone, right panel on a wide screen). tsc clean.
+
 2026-09-01 - the ceiling is 200mb now, measured rather than assumed
 
 the dashboard refused to save 200 while three buckets still read 500 (variations, editing-assets, audio-library), and the storage api refuses to set a bucket above the ceiling that is live at the time, so the two halves deadlock: you cannot lower a 500mb bucket to 200 while the ceiling is 50. the way through is to take those three down to 50 first, save the global 200, then put them back to 200. none of it cost anything: variations and audio-library hold no objects at all, editing-assets holds one 1.3mb file, and the biggest object anywhere in the project is a 36.9mb autopost video.
