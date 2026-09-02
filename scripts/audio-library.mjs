@@ -251,7 +251,13 @@ async function build() {
   // cut into numbered parts that each open on their own. Deliberately NOT
   // `zip -s`, which produces .z01/.z02 pieces that are useless without the set;
   // an editor who grabs one of these has a working folder of music.
-  const PART_LIMIT = 45 * 1024 * 1024;
+  //
+  // This is a node script, so it cannot import lib/upload-limits.ts. It reads
+  // the same variable and keeps a tenth back, because a zip lands a little over
+  // whatever the parts were measured at and a run that dies on the upload has
+  // already spent the compression.
+  const CEILING_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB) || 50;
+  const PART_LIMIT = Math.floor(CEILING_MB * 0.9) * 1024 * 1024;
   await mkdir(join(BUILD_DIR, "kits"), { recursive: true });
 
   const packs = [

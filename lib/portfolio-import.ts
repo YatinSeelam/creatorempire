@@ -31,12 +31,14 @@ import { hasApifyToken, mediaFromItem, runActor } from "@/lib/apify";
 import { fetchInstagramPost, fetchTiktokPost, SC_ENDPOINT } from "@/lib/scrape/scrapecreators";
 import { logUsage } from "@/lib/scrape/usage";
 import type { ClipSource } from "@/lib/portfolio-embed";
+import { capBytes } from "@/lib/upload-limits";
 
 export { importable } from "@/lib/portfolio-embed";
 
-/** 60MB, the same ceiling the browser upload path enforces. A UGC clip is
- *  single-digit megabytes; anything at this size is not one. */
-const MAX_BYTES = 60 * 1024 * 1024;
+/** 60MB, clamped to whatever storage will actually accept, which is the same
+ *  pair of numbers lib/portfolio-upload.ts enforces on a browser upload. A UGC
+ *  clip is single-digit megabytes; anything at this size is not one. */
+const MAX_BYTES = capBytes(60 * 1024 * 1024);
 
 export type ClipMedia = {
   /** a signed cdn url, live for hours. download it, do not store it. */

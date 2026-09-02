@@ -3,15 +3,20 @@
  *
  * This number is NOT ours to pick. Supabase enforces a project-wide upload
  * ceiling in front of every bucket, and a bucket's own `file_size_limit` is
- * only ever the smaller of the two: `autopost` reads 200MB, the project's
- * ceiling is 50MB, and the project wins. So the composer said "mp4 up to
- * 200mb", a 57MB cut was refused with "The object exceeded the maximum allowed
- * size", and the label was the thing that lied.
+ * only ever the smaller of the two. That is how the composer came to say "mp4
+ * up to 200mb" while a 57MB cut was refused with "The object exceeded the
+ * maximum allowed size": `autopost` reads 200MB, the project's ceiling read
+ * 50MB, and the project wins. The label was the thing that lied.
  *
- * Raising it is a change in Supabase (Storage > Settings > upload file size
- * limit, on a plan that allows more than 50MB), then setting
- * NEXT_PUBLIC_MAX_UPLOAD_MB to the same number here. Every label, client check
- * and error message reads this one value, so they move together or not at all.
+ * So the ceiling is set in exactly two places and they must carry the same
+ * number: Supabase (Storage > Settings > upload file size limit, which needs a
+ * plan allowing more than 50MB - this project is on Pro) and
+ * NEXT_PUBLIC_MAX_UPLOAD_MB here. Every label, client check and error message
+ * reads this one value, so they move together or not at all.
+ *
+ * The fallback is 50 rather than 200 on purpose: an environment that forgot the
+ * variable should under-promise and refuse a file storage would have taken,
+ * never advertise a size storage will reject after a two minute upload.
  */
 
 const FALLBACK_MB = 50;

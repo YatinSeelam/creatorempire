@@ -30,9 +30,10 @@ export type AudioAsset = {
 /**
  * One pack of zipped mp3s sitting in the bucket, ready to download.
  *
- * A mood is not always one file: storage refuses an upload over 50mb here, and
- * the bigger moods are several hundred, so the ingest splits them into numbered
- * parts that each open on their own. `label` already says "2 of 3" when that
+ * A mood is not always one file: storage refuses an upload over this project's
+ * ceiling (see lib/upload-limits.ts) and the bigger moods are several hundred
+ * megabytes, so the ingest splits them into numbered parts that each open on
+ * their own. `label` already says "2 of 3" when that
  * happened, so nothing downstream has to know it did.
  */
 export type AudioKit = {
