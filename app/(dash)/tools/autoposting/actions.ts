@@ -429,6 +429,119 @@ export async function dropPost(postId: string): Promise<BatchState> {
   return { ok: "removed from the list. it stays up on the platform." };
 }
 
+/**
+ * Put a cancelled post back on the schedule.
+ *
+ * Cancelling is not deleting, and this is the half that makes that true. The
+ * row survived the cancel with everything the batch step wrote on it — clip,
+ * caption, tags, platforms, options — so bringing it back is a fresh upstream
+ * job off the same row rather than building the batch again.
+ *
+ * It is a NEW job id on purpose: the old one was cancelled at upload-post and
+ * cannot be revived, so anything else would leave a row pointing at a job that
+ * will never fire. The clip is re-resolved through `publicVideoUrl` for the
+ * same reason the queue re-signs its posters: the stored `video_url` of an
+ * editor's cut was signed when the batch went out and is long dead by now.
+ *
+ * Only a cancelled post comes back. A posted one is already out in the world
+ * and a failed one has an outcome worth reading before it is retried.
+ */
+export async function restorePost(
+  postId: string,
+  day: string,
+  min: number
+): Promise<BatchState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "your session expired. sign in again." };
+
+  const postKey = await apiKey("upload_post", user.id);
+
+  const { data: post } = await supabase
+    .from("social_posts")
+    .select(
+      "id, deal_id, caption, hashtags, platforms, options, video_url, source_ref, status"
+    )
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post) return { error: "that post is gone." };
+  if (post.status !== "canceled") {
+    return {
+      error:
+        post.status === "scheduled" || post.status === "processing"
+          ? "that one is already on the schedule."
+          : "only a cancelled post can go back on. schedule a new batch for this clip.",
+    };
+  }
+  if (!post.deal_id) return { error: "that post has no brand on it any more." };
+
+  const platforms = (post.platforms ?? []).filter((p: string) =>
+    AUTOPOST_PLATFORMS.includes(p as AutopostPlatform)
+  ) as AutopostPlatform[];
+  if (platforms.length === 0) return { error: "that post has no platforms on it." };
+
+  const tz = await currentTz();
+  const when = instantOf(day, min, tz);
+  if (Number.isNaN(when.getTime())) return { error: "that time did not read." };
+  if (when.getTime() < Date.now() + MIN_LEAD_MS) {
+    return { error: "that is too soon. leave at least a minute." };
+  }
+
+  const profile = await ensureProfile(supabase, user.id, post.deal_id as string).catch(
+    (err) => err
+  );
+  if (!profile || !("upload_post_username" in profile)) {
+    return { error: postingProblem(profile).toLowerCase() };
+  }
+
+  const video = await publicVideoUrl(
+    supabase,
+    user.id,
+    String(post.source_ref ?? post.video_url ?? "")
+  );
+  if ("error" in video) return { error: video.error };
+
+  let result;
+  try {
+    result = await publishVideo({
+      key: postKey,
+      username: profile.upload_post_username,
+      platforms,
+      caption: String(post.caption ?? ""),
+      videoUrl: video.url,
+      scheduledDate: when.toISOString(),
+      facebookPageId: profile.facebook_page_id,
+      options: withDefaults(post.options as PostOptions | null),
+    });
+  } catch (err) {
+    return {
+      error:
+        err instanceof UploadPostError ? err.message : "could not put it back on the schedule.",
+    };
+  }
+
+  const row = rowFromPublish(result, platforms.length);
+  const bornTerminal = row.status !== "scheduled" && row.status !== "processing";
+
+  const { error } = await supabase
+    .from("social_posts")
+    .update({
+      ...row,
+      video_url: video.url,
+      scheduled_for: when.toISOString(),
+      error: null,
+      // it is a new outcome to announce, so the old "we told them" stamp goes
+      // with the old job.
+      notified_at: bornTerminal ? new Date().toISOString() : null,
+    })
+    .eq("id", postId);
+  if (error) {
+    return { error: "it is back on upstream but the record did not save. reload the page." };
+  }
+
+  revalidateAll(post.deal_id as string);
+  return { ok: "back on the schedule." };
+}
+
 /* ------------------------------------------------------------------- presets */
 
 /** The tag list and platform settings this brand always uses. Saved once, read

@@ -1,3 +1,28 @@
+2026-09-02 — cancelling a post is not deleting it, so it can come back
+
+The sheet added earlier today could take a post off the schedule and that was
+the whole story: a cancelled row sat on the calendar greyed out with nothing to
+press, which made "cancel" read as a soft delete nobody could undo. It never was
+one — dropPost cancels the job at upload-post and KEEPS the row as `canceled`,
+carrying the clip, caption, tags, platforms and options the batch step wrote.
+
+`restorePost(postId, day, min)` is that row going back out: a new upstream job
+off the same record, re-resolving the clip through publicVideoUrl (the stored
+video_url of an editor's cut was signed when the batch went out and is dead by
+now) and clearing `error` / `notified_at` so the new outcome is announced on its
+own. A new job id on purpose: the old one was cancelled upstream and cannot be
+revived, and a row pointing at a job that will never fire is worse than no row.
+Only a `canceled` post comes back — a posted one is already out in the world, a
+failed one has an outcome worth reading first.
+
+The sheet now opens on a cancelled post too and reads the other way round: same
+date and time field, the button says "put it back on", and the foot says
+"cancelled, not deleted. it can go back on any time." with `delete it` beside
+it. Deleting is the only move that asks twice now, because it is the only one
+that cannot be undone; cancelling says out loud that it can.
+
+tsc clean.
+
 2026-09-02 — a student can take a scheduled post off the schedule
 
 dropPost has existed in app/(dash)/tools/autoposting/actions.ts since the tool

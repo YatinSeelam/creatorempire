@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { dropPost, movePost } from "@/app/(dash)/tools/autoposting/actions";
+import { dropPost, movePost, restorePost } from "@/app/(dash)/tools/autoposting/actions";
 import { AutopostBatchFlow } from "@/components/dash/autopost-batch-flow";
 import { AutopostCalendar } from "@/components/dash/autopost-calendar";
 import { BrandMark } from "@/components/dash/brand-mark";
@@ -383,7 +383,7 @@ export function AutopostingWorkspace({
                   router.refresh();
                 });
               }}
-              onOpen={(p) => isLive(p.status) && setEditing(p)}
+              onOpen={(p) => (isLive(p.status) || p.status === "canceled") && setEditing(p)}
             />
           )}
         </div>
@@ -396,9 +396,12 @@ export function AutopostingWorkspace({
           onClose={() => setEditing(null)}
           onSave={(day, min) => {
             const id = editing.id;
+            const gone = editing.status === "canceled";
             setEditing(null);
             startTransition(async () => {
-              const res = await movePost(id, day, min);
+              // a cancelled post has no upstream job left to move, so the same
+              // date and time field books a new one instead.
+              const res = gone ? await restorePost(id, day, min) : await movePost(id, day, min);
               say(res.error ?? res.ok ?? "moved.", Boolean(res.error));
               router.refresh();
             });
@@ -407,8 +410,10 @@ export function AutopostingWorkspace({
             const id = editing.id;
             setEditing(null);
             startTransition(async () => {
+              // the same action twice: on a live post it cancels upstream and
+              // keeps the row, on a cancelled one it deletes the row.
               const res = await dropPost(id);
-              say(res.error ?? res.ok ?? "cancelled.", Boolean(res.error));
+              say(res.error ?? res.ok ?? "done.", Boolean(res.error));
               router.refresh();
             });
           }}
@@ -433,10 +438,15 @@ export function AutopostingWorkspace({
  *
  * Cancelling is the half the calendar could never do. A drag can only ever say
  * "later", and a student who no longer wants a post going out had nothing to
- * press. `dropPost` cancels upstream at upload-post first and keeps the row as
+ * press. `dropPost` cancels upstream at upload-post first and KEEPS the row as
  * `canceled`, so the record stays honest rather than the post quietly vanishing
- * from a list the platform still holds. It asks twice, because it is not
- * undoable: rescheduling a cancelled post means building the batch again.
+ * from a list the platform still holds.
+ *
+ * Which is why the same sheet opens on a cancelled post and reads the other way
+ * round: cancelling is not deleting, so the date and time field is still there
+ * and "put it back on" books a fresh upstream job off the same row (`restorePost`),
+ * with the clip, caption, tags and platforms it always had. Deleting is the
+ * separate, final move underneath, and it is the only one that asks twice.
  */
 function PostSheet({
   post,
@@ -455,7 +465,10 @@ function PostSheet({
   const [time, setTime] = useState(toTimeInput(post.min));
   const [confirm, setConfirm] = useState(false);
   const min = fromTimeInput(time);
-  const unchanged = day === post.day && min === post.min;
+  const gone = post.status === "canceled";
+  // a cancelled post is being booked again, so the time it used to hold is a
+  // perfectly good answer and the button cannot be disabled on it.
+  const unchanged = !gone && day === post.day && min === post.min;
 
   return (
     <>
@@ -467,7 +480,9 @@ function PostSheet({
       />
       <div className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[440px] rounded-t-2xl border border-line bg-paper p-5 shadow-[0_-12px_40px_-24px_rgb(16_16_16/0.5)] sm:inset-y-0 sm:left-auto sm:right-0 sm:my-auto sm:mr-5 sm:h-fit sm:rounded-2xl">
         <div className="mb-4">
-          <div className="text-[15px] font-extrabold tracking-[-0.01em]">move post</div>
+          <div className="text-[15px] font-extrabold tracking-[-0.01em]">
+            {gone ? "cancelled post" : "move post"}
+          </div>
           <div className="mt-0.5 truncate text-[12.5px] text-ink-50">
             {post.videoName ?? (post.caption.slice(0, 60) || "scheduled post")}
           </div>
@@ -518,7 +533,9 @@ function PostSheet({
           </label>
 
           <p className="text-[12.5px] text-ink-50">
-            in your own timezone. a minute from now is as close as it goes.
+            {gone
+              ? "it did not go out. pick when it should, and it goes back on with the same clip and caption."
+              : "in your own timezone. a minute from now is as close as it goes."}
           </p>
 
           <div className="mt-2 flex items-center justify-end gap-2">
@@ -534,16 +551,53 @@ function PostSheet({
               disabled={unchanged}
               className="rounded-pill bg-ink px-4 py-2 text-[13px] font-bold text-paper disabled:opacity-40"
             >
-              move it
+              {gone ? "put it back on" : "move it"}
             </button>
           </div>
         </form>
 
         <div className="mt-4 border-t border-line pt-4">
-          {confirm ? (
+          {gone ? (
+            confirm ? (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[12.5px] text-ink-50">
+                  gone off the calendar for good. you cannot undo this.
+                </span>
+                <span className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirm(false)}
+                    className="rounded-pill px-3 py-2 text-[13px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
+                  >
+                    keep it
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDrop}
+                    className="rounded-pill bg-flame-dark px-4 py-2 text-[13px] font-bold text-on-accent"
+                  >
+                    yes, delete it
+                  </button>
+                </span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-[12.5px] text-ink-50">
+                  cancelled, not deleted. it can go back on any time.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setConfirm(true)}
+                  className="text-[13px] font-bold text-flame-dark hover:underline"
+                >
+                  delete it
+                </button>
+              </div>
+            )
+          ) : confirm ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[12.5px] text-ink-50">
-                it will not go out. you cannot undo this.
+                it will not go out. you can put it back on later.
               </span>
               <span className="flex items-center gap-2">
                 <button
