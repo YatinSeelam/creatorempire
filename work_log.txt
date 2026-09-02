@@ -1,3 +1,11 @@
+2026-09-01 - the ceiling is 200mb now, measured rather than assumed
+
+the dashboard refused to save 200 while three buckets still read 500 (variations, editing-assets, audio-library), and the storage api refuses to set a bucket above the ceiling that is live at the time, so the two halves deadlock: you cannot lower a 500mb bucket to 200 while the ceiling is 50. the way through is to take those three down to 50 first, save the global 200, then put them back to 200. none of it cost anything: variations and audio-library hold no objects at all, editing-assets holds one 1.3mb file, and the biggest object anywhere in the project is a 36.9mb autopost video.
+
+verified against the live project by uploading real bytes to the autopost bucket and deleting them again: 60mb 200, 150mb 200, 190mb 200, 210mb 413 EntityTooLarge. so the line sits exactly where the bucket says it does. buckets now read autopost 200, variations 200, editing-assets 200, audio-library 200, portfolio 60, brand-logos 1, and the global ceiling is 200.
+
+NEXT_PUBLIC_MAX_UPLOAD_MB=200 was already set on vercel for all three environments and deployed, so the composer's label, the client side check and the 413 message all say 200 and all three are now true.
+
 2026-09-01 - the 50mb ceiling was never a table, it is a switch on the project
 
 michael's 57mb cut still would not go up after yesterday's fix, because yesterday's fix only made the app honest about a number it does not own. measured again today against the live project rather than assumed: `autopost` reads 209715200 and a 60mb PUT to it comes back 413 EntityTooLarge, so the bucket is not what refuses. supabase enforces a project-wide upload ceiling in FRONT of every bucket and a bucket's file_size_limit only ever narrows it, and this project's ceiling is still 50mb. there is no sql for that: it is not a row anywhere, it is storage-api's own config, changed in the dashboard (storage > settings > upload file size limit) or through the management api. creator empire's org is on pro, so the number is allowed to move; nobody had moved it.
