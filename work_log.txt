@@ -1,3 +1,49 @@
+2026-09-04 — right click a post: rename it, pause it, or delete it forever
+
+Reported by a student through Gabriel: "they still can't right click to delete
+the videos in the autoposter." The calendar had a sheet on click and nothing on
+the right button, which is the first thing anybody tries on a card in a
+calendar, and the only delete that existed was hidden a step inside it: you had
+to cancel a live post first, reopen the cancelled one, and delete that.
+
+Three moves now, from the menu and from the sheet, both ending in the same two
+helpers so they cannot drift apart:
+
+- rename. `renamePost` writes `social_posts.video_name`, which the batch
+  migration always called "what to call the clip on screen" and which until now
+  was only ever whatever the file was called when it was picked. Two takes off a
+  phone arrive as IMG_0870.mov and IMG_0871.mov and neither is a name anybody
+  can plan a week against. The caption is deliberately not touched: that is the
+  text that goes out, and a label on a planner card must never quietly rewrite a
+  post. Clearing the name puts the card back on the caption. The card line is
+  `videoName || caption` now rather than the other way round, or a rename would
+  be invisible on every post that has a caption, which is most of them.
+
+- pause. `dropPost` is unchanged and still the reversible half: cancelled at
+  upload-post, row kept as `canceled`, the whole plan (clip, caption, tags,
+  platforms, options) still there to put back. What changed is that it now says
+  so. A cancelled card is drawn dashed at 55% opacity, the same idiom the money
+  calendar uses for a day it never read: present on the page, plainly not
+  counted. It was solid grey, which reads as history rather than as paused.
+
+- delete forever. `deletePost` is new and is the irreversible one. A live post
+  is cancelled upstream FIRST and nothing is deleted if that fails, because
+  deleting the only record of a post that still fires is how something goes out
+  that nothing on the calendar can explain. Nothing is ever unpublished by it: a
+  posted row says so as it goes ("deleted. it stays up on the platform."). The
+  clip itself stays in storage, since the same file can sit on more than one
+  post and a delete here is about the schedule, not about the footage.
+
+The menu is the gesture and the sheet is the universal path, since a phone has
+no right button. The one move the menu will not do itself is putting a paused
+post back on: that needs a date and a time, and the sheet is where a time is
+asked for, so the menu opens the sheet rather than guessing one. Pausing asks
+once and deleting asks twice, in the menu and in the sheet both.
+
+No migration. `video_name` has been on the table since the batches migration and
+`social_posts` carries `own_rows for all to authenticated`, so the update and the
+delete are already scoped to the person who owns the row.
+
 2026-09-02 — cancelling a post is not deleting it, so it can come back
 
 The sheet added earlier today could take a post off the schedule and that was

@@ -49,6 +49,7 @@ export function AutopostCalendar({
   today,
   onMove,
   onOpen,
+  onMenu,
 }: {
   posts: ScheduledPost[];
   today: Date;
@@ -56,6 +57,10 @@ export function AutopostCalendar({
    *  where only the date changed */
   onMove: (postId: string, day: string, min: number | null) => void;
   onOpen?: (post: ScheduledPost) => void;
+  /** a right click on a card, reported in viewport coordinates so the caller
+   *  can hang its menu off the cursor. every status answers it, including the
+   *  terminal ones a click will not open. */
+  onMenu?: (post: ScheduledPost, x: number, y: number) => void;
 }) {
   const [view, setView] = useState<"week" | "month">("week");
   const [anchor, setAnchor] = useState(today);
@@ -482,7 +487,7 @@ export function AutopostCalendar({
                               <Marks platforms={ghost.platforms} />
                             </span>
                             <span className="mt-0.5 block truncate text-[9px] leading-[1.2]">
-                              {ghost.caption || ghost.videoName}
+                              {ghost.videoName || ghost.caption}
                             </span>
                           </span>
                         </div>
@@ -528,8 +533,15 @@ export function AutopostCalendar({
                               press.current = null;
                               setDrag(null);
                             }}
+                            onContextMenu={(e) => {
+                              if (!onMenu) return;
+                              e.preventDefault();
+                              press.current = null;
+                              setDrag(null);
+                              onMenu(p, e.clientX, e.clientY);
+                            }}
                             onClick={() => onCardClick(p)}
-                            title={p.caption || p.videoName || undefined}
+                            title={[p.videoName, p.caption].filter(Boolean).join(" — ") || undefined}
                             className={`absolute flex touch-none select-none items-center gap-1.5 overflow-hidden rounded-lg border border-l-[3px] p-1 text-left shadow-card transition-opacity ${t.box} ${t.rail} ${
                               live ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                             } ${drag?.active && drag.id === p.id ? "opacity-35" : ""}`}
@@ -553,7 +565,7 @@ export function AutopostCalendar({
                                   live ? "" : "text-ink-50"
                                 }`}
                               >
-                                {p.caption || p.videoName}
+                                {p.videoName || p.caption}
                               </span>
                             </span>
                           </button>
@@ -635,8 +647,15 @@ export function AutopostCalendar({
                               press.current = null;
                               setDrag(null);
                             }}
+                            onContextMenu={(e) => {
+                              if (!onMenu) return;
+                              e.preventDefault();
+                              press.current = null;
+                              setDrag(null);
+                              onMenu(p, e.clientX, e.clientY);
+                            }}
                             onClick={() => onCardClick(p)}
-                            title={p.caption || p.videoName || undefined}
+                            title={[p.videoName, p.caption].filter(Boolean).join(" — ") || undefined}
                             className={`flex w-full touch-none select-none items-center gap-1.5 rounded-lg border-l-[3px] p-1 text-left transition-opacity ${t.cell} ${t.rail} ${
                               live ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                             } ${drag?.active && drag.id === p.id ? "opacity-35" : ""}`}
@@ -654,7 +673,7 @@ export function AutopostCalendar({
                                   live ? "" : "text-ink-50"
                                 }`}
                               >
-                                {p.caption || p.videoName}
+                                {p.videoName || p.caption}
                               </span>
                             </span>
                           </button>
@@ -702,9 +721,12 @@ function tone(status: ScheduledPost["status"]): {
     };
   }
   if (status === "canceled") {
+    // paused, not gone. dashed and half there is the same idiom the money
+    // calendar uses for a day it never read: present on the page, plainly not
+    // counted. a solid grey card reads as history, and this one can come back.
     return {
-      box: "bg-shell border-line",
-      cell: "bg-shell",
+      box: "border-dashed bg-shell border-line opacity-55",
+      cell: "border-dashed bg-shell opacity-55",
       rail: "border-l-line",
       text: "text-ink-50",
     };

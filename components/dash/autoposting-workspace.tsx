@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
-import { dropPost, movePost, restorePost } from "@/app/(dash)/tools/autoposting/actions";
+import {
+  deletePost,
+  dropPost,
+  movePost,
+  renamePost,
+  restorePost,
+} from "@/app/(dash)/tools/autoposting/actions";
 import { AutopostBatchFlow } from "@/components/dash/autopost-batch-flow";
 import { AutopostCalendar } from "@/components/dash/autopost-calendar";
 import { BrandMark } from "@/components/dash/brand-mark";
@@ -59,6 +65,10 @@ export function AutopostingWorkspace({
   const [query, setQuery] = useState("");
   const [toast, setToast] = useState<{ msg: string; bad?: boolean } | null>(null);
   const [editing, setEditing] = useState<ScheduledPost | null>(null);
+  /** the right click menu, and where the cursor was when it opened. */
+  const [menu, setMenu] = useState<{ post: ScheduledPost; x: number; y: number } | null>(
+    null
+  );
   const [, startTransition] = useTransition();
 
   // remounts the wizard after a batch lands, so a second batch starts clean
@@ -71,6 +81,31 @@ export function AutopostingWorkspace({
   function say(msg: string, bad?: boolean) {
     setToast({ msg, bad });
     window.setTimeout(() => setToast(null), 2600);
+  }
+
+  /**
+   * Take a post off the schedule.
+   *
+   * The same call from the sheet and from the menu, deliberately: the row goes
+   * to `canceled` and stays on the calendar, drawn dashed and half there, so
+   * the clip, the caption, the tags and the platform set are all still a plan
+   * somebody can put back rather than a batch they have to rebuild.
+   */
+  function runDrop(id: string) {
+    startTransition(async () => {
+      const res = await dropPost(id);
+      say(res.error ?? res.ok ?? "done.", Boolean(res.error));
+      router.refresh();
+    });
+  }
+
+  /** The irreversible one. Cancelled upstream first, then the row goes. */
+  function runDelete(id: string) {
+    startTransition(async () => {
+      const res = await deletePost(id);
+      say(res.error ?? res.ok ?? "deleted.", Boolean(res.error));
+      router.refresh();
+    });
   }
 
   function pickDeal(id: string) {
@@ -384,6 +419,7 @@ export function AutopostingWorkspace({
                 });
               }}
               onOpen={(p) => (isLive(p.status) || p.status === "canceled") && setEditing(p)}
+              onMenu={(p, x, y) => setMenu({ post: p, x, y })}
             />
           )}
         </div>
@@ -394,28 +430,75 @@ export function AutopostingWorkspace({
           post={editing}
           todayKey={todayKey}
           onClose={() => setEditing(null)}
-          onSave={(day, min) => {
-            const id = editing.id;
-            const gone = editing.status === "canceled";
+          onSave={(day, min, name) => {
+            const post = editing;
             setEditing(null);
             startTransition(async () => {
-              // a cancelled post has no upstream job left to move, so the same
-              // date and time field books a new one instead.
-              const res = gone ? await restorePost(id, day, min) : await movePost(id, day, min);
-              say(res.error ?? res.ok ?? "moved.", Boolean(res.error));
+              const said: string[] = [];
+              let bad = false;
+              const eat = (r: { error?: string; ok?: string }) => {
+                if (r.error) bad = true;
+                if (r.error ?? r.ok) said.push((r.error ?? r.ok) as string);
+              };
+              // the name first, because it is local and cannot fail upstream.
+              // a move that then fails leaves the rename standing, which is the
+              // right way round: nothing was booked, and the label is honest.
+              if (name !== (post.videoName ?? "")) eat(await renamePost(post.id, name));
+              const gone = post.status === "canceled";
+              if (gone || day !== post.day || min !== post.min) {
+                // a cancelled post has no upstream job left to move, so the same
+                // date and time field books a new one instead.
+                eat(gone ? await restorePost(post.id, day, min) : await movePost(post.id, day, min));
+              }
+              say(said.join(" ") || "saved.", bad);
               router.refresh();
             });
           }}
           onDrop={() => {
             const id = editing.id;
             setEditing(null);
+            runDrop(id);
+          }}
+          onDelete={() => {
+            const id = editing.id;
+            setEditing(null);
+            runDelete(id);
+          }}
+        />
+      )}
+
+      {menu && (
+        <CardMenu
+          post={menu.post}
+          x={menu.x}
+          y={menu.y}
+          onClose={() => setMenu(null)}
+          onRename={(name) => {
+            const post = menu.post;
+            setMenu(null);
+            if (name === (post.videoName ?? "")) return;
             startTransition(async () => {
-              // the same action twice: on a live post it cancels upstream and
-              // keeps the row, on a cancelled one it deletes the row.
-              const res = await dropPost(id);
-              say(res.error ?? res.ok ?? "done.", Boolean(res.error));
+              const res = await renamePost(post.id, name);
+              say(res.error ?? res.ok ?? "renamed.", Boolean(res.error));
               router.refresh();
             });
+          }}
+          onDrop={() => {
+            const id = menu.post.id;
+            setMenu(null);
+            runDrop(id);
+          }}
+          onRestore={() => {
+            const post = menu.post;
+            setMenu(null);
+            // putting one back on needs a time, and the sheet is where a time
+            // is asked for. the menu hands it over rather than guessing one.
+            setEditing(post);
+          }}
+          onDelete={() => {
+            const id = menu.post.id;
+            setMenu(null);
+            runDelete(id);
           }}
         />
       )}
@@ -454,21 +537,27 @@ function PostSheet({
   onClose,
   onSave,
   onDrop,
+  onDelete,
 }: {
   post: ScheduledPost;
   todayKey: string;
   onClose: () => void;
-  onSave: (day: string, min: number) => void;
+  onSave: (day: string, min: number, name: string) => void;
   onDrop: () => void;
+  onDelete: () => void;
 }) {
   const [day, setDay] = useState(post.day);
   const [time, setTime] = useState(toTimeInput(post.min));
-  const [confirm, setConfirm] = useState(false);
+  const [name, setName] = useState(post.videoName ?? "");
+  // one confirm at a time, and which one it is decides what the row says. two
+  // booleans got these two answers confused the moment both were reachable.
+  const [confirm, setConfirm] = useState<null | "drop" | "delete">(null);
   const min = fromTimeInput(time);
   const gone = post.status === "canceled";
   // a cancelled post is being booked again, so the time it used to hold is a
   // perfectly good answer and the button cannot be disabled on it.
-  const unchanged = !gone && day === post.day && min === post.min;
+  const unchanged =
+    !gone && day === post.day && min === post.min && name === (post.videoName ?? "");
 
   return (
     <>
@@ -481,7 +570,7 @@ function PostSheet({
       <div className="fixed inset-x-0 bottom-0 z-50 mx-auto w-full max-w-[440px] rounded-t-2xl border border-line bg-paper p-5 shadow-[0_-12px_40px_-24px_rgb(16_16_16/0.5)] sm:inset-y-0 sm:left-auto sm:right-0 sm:my-auto sm:mr-5 sm:h-fit sm:rounded-2xl">
         <div className="mb-4">
           <div className="text-[15px] font-extrabold tracking-[-0.01em]">
-            {gone ? "cancelled post" : "move post"}
+            {gone ? "paused post" : "edit post"}
           </div>
           <div className="mt-0.5 truncate text-[12.5px] text-ink-50">
             {post.videoName ?? (post.caption.slice(0, 60) || "scheduled post")}
@@ -493,7 +582,7 @@ function PostSheet({
           onSubmit={(e) => {
             e.preventDefault();
             if (!day || !time) return;
-            onSave(day, min);
+            onSave(day, min, name.trim());
           }}
         >
           <div className="flex items-center gap-2">
@@ -504,6 +593,26 @@ function PostSheet({
               {post.platforms.map((pf) => PLATFORM_LABEL[pf]).join(", ")}
             </span>
           </div>
+
+          {/* the name is a label on the card, never the caption. the caption is
+              what goes out, and renaming a tile must not rewrite a post. */}
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-50">
+              name
+            </span>
+            <input
+              type="text"
+              value={name}
+              maxLength={200}
+              placeholder={post.caption.slice(0, 40) || "untitled"}
+              onChange={(e) => setName(e.target.value)}
+              className="rounded-pill border border-line bg-paper px-3 py-2 text-[13px] font-semibold outline-none focus:border-flame"
+            />
+            <span className="text-[11.5px] text-ink-50">
+              what this clip is called on the calendar. it does not change the
+              caption that goes out.
+            </span>
+          </label>
 
           <label className="grid gap-1.5">
             <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-ink-50">
@@ -551,22 +660,25 @@ function PostSheet({
               disabled={unchanged}
               className="rounded-pill bg-ink px-4 py-2 text-[13px] font-bold text-paper disabled:opacity-40"
             >
-              {gone ? "put it back on" : "move it"}
+              {gone ? "put it back on" : "save"}
             </button>
           </div>
         </form>
 
-        <div className="mt-4 border-t border-line pt-4">
-          {gone ? (
-            confirm ? (
+        <div className="mt-4 grid gap-3 border-t border-line pt-4">
+          {/* two ways out, and the reversible one goes first. pausing keeps the
+              whole plan on the calendar; deleting is the only one that asks
+              twice, because there is nothing to put back after it. */}
+          {!gone &&
+            (confirm === "drop" ? (
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[12.5px] text-ink-50">
-                  gone off the calendar for good. you cannot undo this.
+                  it will not go out. you can put it back on later.
                 </span>
                 <span className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setConfirm(false)}
+                    onClick={() => setConfirm(null)}
                     className="rounded-pill px-3 py-2 text-[13px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
                   >
                     keep it
@@ -574,58 +686,221 @@ function PostSheet({
                   <button
                     type="button"
                     onClick={onDrop}
-                    className="rounded-pill bg-flame-dark px-4 py-2 text-[13px] font-bold text-on-accent"
+                    className="rounded-pill bg-ink px-4 py-2 text-[13px] font-bold text-paper"
                   >
-                    yes, delete it
+                    yes, pause it
                   </button>
                 </span>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[12.5px] text-ink-50">
-                  cancelled, not deleted. it can go back on any time.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setConfirm(true)}
-                  className="text-[13px] font-bold text-flame-dark hover:underline"
-                >
-                  delete it
-                </button>
-              </div>
-            )
-          ) : confirm ? (
+              <button
+                type="button"
+                onClick={() => setConfirm("drop")}
+                className="text-left text-[13px] font-bold text-ink hover:underline"
+              >
+                pause it (take it off the schedule)
+              </button>
+            ))}
+
+          {gone && confirm !== "delete" && (
+            <span className="text-[12.5px] text-ink-50">
+              paused, not deleted. it can go back on any time.
+            </span>
+          )}
+
+          {confirm === "delete" ? (
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[12.5px] text-ink-50">
-                it will not go out. you can put it back on later.
+                {post.status === "posted" || post.status === "partial"
+                  ? "it comes off the calendar for good. it stays up on the platform."
+                  : "gone off the calendar for good. you cannot undo this."}
               </span>
               <span className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setConfirm(false)}
+                  onClick={() => setConfirm(null)}
                   className="rounded-pill px-3 py-2 text-[13px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
                 >
                   keep it
                 </button>
                 <button
                   type="button"
-                  onClick={onDrop}
+                  onClick={onDelete}
                   className="rounded-pill bg-flame-dark px-4 py-2 text-[13px] font-bold text-on-accent"
                 >
-                  yes, cancel it
+                  yes, delete it
                 </button>
               </span>
             </div>
           ) : (
             <button
               type="button"
-              onClick={() => setConfirm(true)}
-              className="text-[13px] font-bold text-flame-dark hover:underline"
+              onClick={() => setConfirm("delete")}
+              className="text-left text-[13px] font-bold text-flame-dark hover:underline"
             >
-              take it off the schedule
+              delete it forever
             </button>
           )}
         </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The right click menu on a calendar card.
+ *
+ * Nothing here is new capability: rename, pause, put back and delete are all in
+ * the sheet a click opens. What the menu buys is the gesture people arrive
+ * expecting, and the count that goes with it. A student clearing nine posts off
+ * a week should not have to open, confirm and close nine sheets, and the first
+ * thing anybody tries on a card in a calendar is the right button.
+ *
+ * The menu asks again in place rather than handing off to a dialog. Pausing is
+ * reversible and gets one tap; deleting is not and asks twice, and the second
+ * tap is the only red thing on the card.
+ *
+ * Putting a paused post back is the one move the menu does NOT do itself: it
+ * needs a date and a time, and the sheet is where a time is asked for. So it
+ * opens the sheet rather than guessing one.
+ */
+function CardMenu({
+  post,
+  x,
+  y,
+  onClose,
+  onRename,
+  onDrop,
+  onRestore,
+  onDelete,
+}: {
+  post: ScheduledPost;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onRename: (name: string) => void;
+  onDrop: () => void;
+  onRestore: () => void;
+  onDelete: () => void;
+}) {
+  const [mode, setMode] = useState<"menu" | "rename" | "confirm">("menu");
+  const [name, setName] = useState(post.videoName ?? "");
+  const live = isLive(post.status);
+  const gone = post.status === "canceled";
+
+  // clamped so a right click near the right edge or the floor does not open a
+  // menu half off the screen. only ever rendered off a pointer event, so the
+  // window is there by the time this runs.
+  const left = Math.max(8, Math.min(x, window.innerWidth - 236));
+  const top = Math.max(8, Math.min(y, window.innerHeight - 210));
+
+  const row =
+    "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] font-semibold hover:bg-shell";
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="close"
+        onClick={onClose}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onClose();
+        }}
+        className="fixed inset-0 z-40 cursor-default"
+      />
+      <div
+        className="fixed z-50 w-[228px] rounded-xl border border-line bg-paper p-1.5 shadow-card"
+        style={{ left, top }}
+      >
+        <div className="truncate px-3 pb-1.5 pt-1 text-[11.5px] text-ink-50">
+          {post.videoName || post.caption.slice(0, 40) || "scheduled post"}
+        </div>
+
+        {mode === "rename" ? (
+          <form
+            className="grid gap-2 p-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onRename(name.trim());
+            }}
+          >
+            <input
+              type="text"
+              value={name}
+              autoFocus
+              maxLength={200}
+              placeholder={post.caption.slice(0, 30) || "untitled"}
+              onChange={(e) => setName(e.target.value)}
+              className="rounded-pill border border-line bg-paper px-3 py-1.5 text-[13px] font-semibold outline-none focus:border-flame"
+            />
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMode("menu")}
+                className="rounded-pill px-3 py-1.5 text-[12.5px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
+              >
+                cancel
+              </button>
+              <button
+                type="submit"
+                className="rounded-pill bg-ink px-3 py-1.5 text-[12.5px] font-bold text-paper"
+              >
+                rename
+              </button>
+            </div>
+          </form>
+        ) : mode === "confirm" ? (
+          <div className="grid gap-2 p-1.5">
+            <span className="px-1.5 text-[12px] text-ink-50">
+              {post.status === "posted" || post.status === "partial"
+                ? "off the calendar for good. it stays up on the platform."
+                : "gone for good. you cannot undo this."}
+            </span>
+            <div className="flex items-center justify-end gap-1.5">
+              <button
+                type="button"
+                onClick={() => setMode("menu")}
+                className="rounded-pill px-3 py-1.5 text-[12.5px] font-semibold text-ink-50 hover:bg-shell hover:text-ink"
+              >
+                keep it
+              </button>
+              <button
+                type="button"
+                onClick={onDelete}
+                className="rounded-pill bg-flame-dark px-3 py-1.5 text-[12.5px] font-bold text-on-accent"
+              >
+                delete it
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid">
+            <button type="button" onClick={() => setMode("rename")} className={row}>
+              rename
+            </button>
+
+            {live && (
+              <button type="button" onClick={onDrop} className={row}>
+                pause it
+              </button>
+            )}
+
+            {gone && (
+              <button type="button" onClick={onRestore} className={row}>
+                put it back on
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setMode("confirm")}
+              className={`${row} text-flame-dark`}
+            >
+              delete forever
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

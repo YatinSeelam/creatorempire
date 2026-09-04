@@ -542,6 +542,100 @@ export async function restorePost(
   return { ok: "back on the schedule." };
 }
 
+/**
+ * Rename a post.
+ *
+ * `video_name` is what the batch migration always called "what to call the clip
+ * on screen", and until now it was only ever whatever the file happened to be
+ * called when it was picked. Two takes off a phone arrive as `IMG_0870.mov` and
+ * `IMG_0871.mov`, which is not a name anybody can plan a week against, so the
+ * card takes one.
+ *
+ * The caption is deliberately NOT touched. That is the text that goes out on
+ * the platform, and a label on a planner card must never quietly rewrite a
+ * post. Clearing the name puts the card back on the caption.
+ */
+export async function renamePost(postId: string, name: string): Promise<BatchState> {
+  const { supabase, user } = await authed();
+  if (!user) return { error: "your session expired. sign in again." };
+
+  // the same 200 the batch step stores a filename under, so a rename can never
+  // be refused by a column a schedule was allowed to write.
+  const clean = String(name ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
+
+  const { data: post } = await supabase
+    .from("social_posts")
+    .select("id, deal_id")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post) return { error: "that post is gone." };
+
+  const { error } = await supabase
+    .from("social_posts")
+    .update({ video_name: clean || null })
+    .eq("id", postId);
+  if (error) return { error: "could not rename it. try again." };
+
+  revalidateAll(post.deal_id as string | null);
+  return { ok: clean ? "renamed." : "name cleared." };
+}
+
+/**
+ * Delete a post, for good.
+ *
+ * `dropPost` is the reversible half: it cancels upstream and KEEPS the row as
+ * `canceled`, so the plan somebody built — the clip, the caption, the tags, the
+ * platform set — survives being taken off the schedule. This is the other
+ * answer, for a post that should not be on the planner at all.
+ *
+ * A live one is cancelled upstream FIRST and nothing is deleted if that fails,
+ * because deleting the only record of a post that still fires is how something
+ * goes out that nothing on the calendar can explain.
+ *
+ * Nothing is ever unpublished by it: a posted row says so as it goes. The clip
+ * itself stays in storage, since the same file can be on more than one post and
+ * a delete here is about the schedule, not about the footage.
+ */
+export async function deletePost(postId: string): Promise<BatchState> {
+  const { supabase, user } = await authed();
+  const postKey = await apiKey("upload_post", user?.id ?? null);
+  if (!user) return { error: "your session expired. sign in again." };
+
+  const { data: post } = await supabase
+    .from("social_posts")
+    .select("id, deal_id, job_id, status")
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post) return { error: "that post is gone." };
+
+  const status = String(post.status ?? "");
+  const live = status === "scheduled" || status === "processing";
+
+  if (live && post.job_id) {
+    try {
+      await cancelScheduledJob(post.job_id as string, postKey);
+    } catch (err) {
+      return {
+        error:
+          err instanceof UploadPostError
+            ? err.message
+            : "could not cancel it upstream, so nothing was deleted.",
+      };
+    }
+  }
+
+  const { error } = await supabase.from("social_posts").delete().eq("id", postId);
+  if (error) return { error: "could not delete that one. try again." };
+
+  revalidateAll(post.deal_id as string | null);
+  return {
+    ok:
+      status === "posted" || status === "partial"
+        ? "deleted. it stays up on the platform."
+        : "deleted.",
+  };
+}
+
 /* ------------------------------------------------------------------- presets */
 
 /** The tag list and platform settings this brand always uses. Saved once, read
