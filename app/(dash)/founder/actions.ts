@@ -169,7 +169,7 @@ export async function setAccess(formData: FormData): Promise<AccessState> {
   if (level === "founder") {
     const { error } = await supabase
       .from("admin_emails")
-      .upsert({ email, role: "founder", added_by: user.id }, { onConflict: "email" });
+      .upsert({ email, role: "founder" }, { onConflict: "email" });
     if (error) return { error: error.message };
   } else {
     const { error } = await supabase.from("admin_emails").delete().eq("email", email);

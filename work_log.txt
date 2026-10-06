@@ -1,3 +1,29 @@
+2026-10-06 — creatorempire11@gmail.com is a founder, and the access picker can write a founder again
+
+Asked for as "full admin and founder access, ability to manage students" on
+the creator empire side only. Measured first: the account existed
+(`9767b2ed…`, signed in 2026-09-16), already held the `admin` seat on the
+creator-empire org since 2026-08-28, and was NOT on `admin_emails`, so
+/founder, the access picker and view-as were shut to them while the roster
+page was open. The grant is the missing half; the seat was already right.
+
+Applied live through the service client (`admin_emails` upsert, role founder),
+then verified as the account itself off a minted magic link: `am_i_admin()`
+true, `my_granted_role()` founder, 21 org_members rows readable under
+`x-admin-view`. Session logged out after. Recorded as
+`20261006015500_creatorempire11_is_a_founder.sql`, idempotent.
+
+Found on the way: the live `admin_emails` table has no `added_by` column
+(select of it answers 400), and `setAccess` in `app/(dash)/founder/actions.ts`
+upserted `added_by: user.id`, so the one press this grant exists for, making
+somebody else a founder from the people list, would have been refused by
+postgrest with a column error. The field is dropped from the upsert; the
+student and no-access paths never touched it.
+
+Not done: the owner seat. `orgs.owner_id` stays the platform account, so
+branding, the flow key and deleting the workspace are still ours. Handing
+those over is a separate decision.
+
 2026-09-04 — right click a post: rename it, pause it, or delete it forever
 
 Reported by a student through Gabriel: "they still can't right click to delete
