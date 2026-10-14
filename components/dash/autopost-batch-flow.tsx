@@ -29,6 +29,8 @@ import { PLATFORMS, PLATFORM_LABEL, type Platform } from "@/lib/deals";
 import { PLATFORM_COLOR } from "@/lib/autopost/plan";
 import { Picker } from "@/components/dash/form";
 import { ClipThumb } from "@/components/dash/clip-thumb";
+import { CoverPicker } from "@/components/dash/cover-picker";
+import { coverLabel, coverReaches } from "@/lib/autopost/cover";
 import { BrandMark } from "@/components/dash/brand-mark";
 import { PlatformGlyph } from "@/components/dash/platform-glyph";
 import { ConnectButton } from "@/components/dash/connect-button";
@@ -135,6 +137,11 @@ export function AutopostBatchFlow({
   // has to decide whether it wants the thing.
   const [dragClip, setDragClip] = useState<string | null>(null);
   const [captions, setCaptions] = useState<Record<string, string>>({});
+  /** the frame each clip opens on, per clip like a caption. no entry is no
+   *  choice, which leaves tiktok on `coverSecond` and instagram on its own. */
+  const [covers, setCovers] = useState<Record<string, number>>({});
+  /** the clip whose cover picker is open. one at a time: it is a picture. */
+  const [coverFor, setCoverFor] = useState<string | null>(null);
 
   const [useTags, setUseTags] = useState(true);
   const [tags, setTags] = useState<string[]>(initialHashtags);
@@ -271,6 +278,21 @@ export function AutopostBatchFlow({
     setStep(next);
   }
 
+  // a frame reaches tiktok and an instagram reel and nothing else, so the
+  // picker is only offered when one of those is on the batch.
+  const canCover = coverReaches(platforms, options);
+  const coverNote = (() => {
+    const ig = platforms.includes("instagram") && options.instagram.mediaType !== "Story";
+    const tt = platforms.includes("tiktok");
+    const lands = tt && ig ? "tiktok and instagram" : tt ? "tiktok" : "instagram";
+    const skips = platforms.filter(
+      (p) => p === "youtube" || p === "facebook" || (p === "instagram" && !ig)
+    );
+    return skips.length
+      ? `the cover lands on ${lands}. ${skips.join(" and ")} pick their own.`
+      : `the cover lands on ${lands}.`;
+  })();
+
   async function confirm() {
     if (busy) return;
     setBusy(true);
@@ -290,6 +312,7 @@ export function AutopostBatchFlow({
           caption: finalCaption(captions[row.clipId] ?? "", tags, useTags),
           day: row.day,
           min: row.min,
+          coverMs: canCover ? covers[row.clipId] ?? null : null,
         };
       }),
     }).catch(
@@ -670,7 +693,34 @@ export function AutopostBatchFlow({
                 return (
                   <div key={id} className="flex gap-3 rounded-lg border border-line bg-shell/40 p-3">
                     <div className="relative shrink-0">
-                      <ClipThumb src={clip?.previewUrl ?? null} size="md" />
+                      {/* the thumb IS the cover, so pressing it is how the
+                          cover is changed. */}
+                      {canCover ? (
+                        <button
+                          type="button"
+                          onClick={() => setCoverFor((c) => (c === id ? null : id))}
+                          aria-expanded={coverFor === id}
+                          aria-label={
+                            covers[id] === undefined
+                              ? `pick the cover for clip ${i + 1}`
+                              : `change the cover for clip ${i + 1}, now ${coverLabel(covers[id])}`
+                          }
+                          className={`block rounded-[9px] transition-shadow ${
+                            coverFor === id ? "ring-2 ring-flame" : "hover:ring-2 hover:ring-flame/50"
+                          }`}
+                        >
+                          <ClipThumb
+                            src={clip?.previewUrl ?? null}
+                            size="md"
+                            at={(covers[id] ?? 600) / 1000}
+                          />
+                          <span className="absolute inset-x-0 bottom-0 rounded-b-[9px] bg-ink/75 py-0.5 text-center text-[9px] font-bold tabular-nums text-paper">
+                            {covers[id] === undefined ? "cover" : coverLabel(covers[id])}
+                          </span>
+                        </button>
+                      ) : (
+                        <ClipThumb src={clip?.previewUrl ?? null} size="md" />
+                      )}
                       <span className="absolute -left-1 -top-1 flex size-4 items-center justify-center rounded-[4px] bg-ink text-[9px] font-bold text-paper">
                         {i + 1}
                       </span>
@@ -689,6 +739,12 @@ export function AutopostBatchFlow({
                               delete next[id];
                               return next;
                             });
+                            setCovers((c) => {
+                              const next = { ...c };
+                              delete next[id];
+                              return next;
+                            });
+                            setCoverFor((c) => (c === id ? null : c));
                           }}
                           className="ml-auto shrink-0 text-[11.5px] font-medium text-ink-50 transition-colors hover:text-ink"
                         >
@@ -731,6 +787,26 @@ export function AutopostBatchFlow({
                         <p className="mt-1 text-[12px] font-bold text-ink">
                           too long with the tags on. trim it or drop a tag.
                         </p>
+                      )}
+                      {canCover && coverFor === id && (
+                        <div className="mt-3 max-w-[720px]">
+                          <p className="mb-2 text-[12px] font-semibold text-ink-70">
+                            pick the frame this post opens on
+                          </p>
+                          <CoverPicker
+                            src={clip?.previewUrl ?? null}
+                            coverMs={covers[id] ?? null}
+                            note={coverNote}
+                            onPick={(ms) =>
+                              setCovers((prev) => {
+                                const next = { ...prev };
+                                if (ms === null) delete next[id];
+                                else next[id] = ms;
+                                return next;
+                              })
+                            }
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1225,7 +1301,11 @@ export function AutopostBatchFlow({
                         }))
                       }
                     />
-                    <ClipThumb src={clip?.previewUrl ?? null} size="sm" />
+                    <ClipThumb
+                      src={clip?.previewUrl ?? null}
+                      size="sm"
+                      at={(canCover ? covers[row.clipId] ?? 600 : 600) / 1000}
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-semibold">
                         {finalCaption(captions[row.clipId] ?? "", tags, useTags) ||

@@ -1,3 +1,17 @@
+2026-10-13 — the autoposter picks each clip's cover, and a one-time card says so
+
+Ported ugc flows' cover picker. On the captions step a clip's thumbnail is a
+button; it opens a strip of the clip's own frames plus a slider, and the
+picked frame goes out as thumb_offset on an instagram reel and
+cover_timestamp on tiktok (lib/autopost/cover.ts is the rule; youtube and
+facebook reels take no frame, so the picker only shows when tiktok or an
+instagram reel is on the batch). No pick sends exactly what it sent before.
+No migration: the cover rides social_posts.options as coverMs, so a restore
+resends it. components/dash/feature-update.tsx is a once-per-browser
+"feature update" card in the (dash) layout, hidden while viewing as.
+
+
+
 2026-10-06 — creatorempire11@gmail.com is a founder, and the access picker can write a founder again
 
 Asked for as "full admin and founder access, ability to manage students" on

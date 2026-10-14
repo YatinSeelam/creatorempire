@@ -9,6 +9,7 @@ import { loadWorkspace } from "@/lib/workspace";
 import { readTheme, THEME_COOKIE } from "@/lib/theme";
 import { readTz, TZ_COOKIE } from "@/lib/tz";
 import { TzSync } from "@/components/tz-sync";
+import { FeatureUpdate } from "@/components/dash/feature-update";
 
 export const metadata: Metadata = {
   title: "Creator Empire",
@@ -40,6 +41,7 @@ export default async function DashLayout({ children }: { children: ReactNode }) 
     <div className="dash-shell min-h-dvh bg-shell" data-theme={theme}>
       {viewingAs && <ViewAsBanner name={viewingAs} />}
       <TzSync current={tz} />
+      {!viewingAs && <FeatureUpdate />}
       <SideNav
         viewer={viewer}
         isFounder={access.isFounder}

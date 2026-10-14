@@ -1,5 +1,6 @@
 "use server";
 
+import { readCoverMs, storedCoverMs } from "@/lib/autopost/cover";
 import { apiKey } from "@/lib/api-keys";
 import { revalidatePath } from "next/cache";
 import { MAX_CAPTION } from "@/lib/autopost/limits";
@@ -96,6 +97,8 @@ export type BatchPost = {
   day: string;
   /** minutes from midnight, the creator's own clock */
   min: number;
+  /** ms into the clip the post opens on, or null for no choice */
+  coverMs?: number | null;
 };
 
 export type BatchInput = {
@@ -199,6 +202,10 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
     const video = await publicVideoUrl(supabase, user.id, String(post.ref ?? ""));
     if ("error" in video) return stopHere(done, video.error);
 
+    // re-read, never trusted: the browser's number is a claim. it rides the
+    // row's own options jsonb so a restore sends the same frame.
+    const coverMs = readCoverMs(post.coverMs);
+
     let result;
     try {
       result = await publishVideo({
@@ -210,6 +217,7 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
         scheduledDate: immediate ? undefined : when.toISOString(),
         facebookPageId: profile.facebook_page_id,
         options,
+        coverMs,
       });
     } catch (err) {
       return stopHere(
@@ -228,7 +236,7 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
       caption,
       hashtags,
       platforms,
-      options,
+      options: coverMs === null ? options : { ...options, coverMs },
       video_url: video.url,
       video_name: String(post.name ?? "").slice(0, 200) || null,
       // the column's check constraint is ('editor', 'upload') and a rendered
@@ -511,6 +519,7 @@ export async function restorePost(
       scheduledDate: when.toISOString(),
       facebookPageId: profile.facebook_page_id,
       options: withDefaults(post.options as PostOptions | null),
+      coverMs: storedCoverMs(post.options),
     });
   } catch (err) {
     return {

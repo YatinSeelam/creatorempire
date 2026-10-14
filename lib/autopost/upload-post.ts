@@ -25,6 +25,7 @@ import {
   YOUTUBE_CATEGORY_ID,
   type PostOptions,
 } from "@/lib/autopost/plan";
+import { coverOffsets } from "@/lib/autopost/cover";
 
 const BASE_URL = "https://api.upload-post.com/api";
 
@@ -320,6 +321,10 @@ export function publishVideo(input: {
   options?: PostOptions | null;
   /** the workspace's own upload-post key, when it has one. */
   key?: string | null;
+  /** ms into the clip the cover frame is taken from, for this clip only.
+   *  null means nobody picked one: tiktok falls back to the batch's
+   *  `coverSecond` and instagram is sent nothing. see lib/autopost/cover.ts. */
+  coverMs?: number | null;
 }): Promise<PublishResult> {
   const form = new FormData();
   form.append("user", input.username);
@@ -335,6 +340,9 @@ export function publishVideo(input: {
   }
   if (input.scheduledDate) form.append("scheduled_date", input.scheduledDate);
   if (input.options) appendOptions(form, input.platforms, input.options);
+  // outside the options block on purpose: the cover is a fact about the clip,
+  // and the single composer sends no options at all.
+  appendCover(form, input.platforms, input.options ?? null, input.coverMs ?? null);
 
   form.append("video", input.videoUrl);
   return api<PublishResult>(
@@ -391,10 +399,9 @@ function appendOptions(
     form.append("brand_content_toggle", String(t.branded));
     form.append("brand_organic_toggle", String(t.ownBrand));
     form.append("is_aigc", String(t.aiGenerated));
-    // theirs is milliseconds. clamped because a cover past the end of the clip
-    // is a rejected post rather than a fallback to frame zero.
-    const cover = Math.max(0, Math.round((t.coverSecond || 0) * 1000));
-    form.append("cover_timestamp", String(cover));
+    // the cover moved to `appendCover`: a clip can pick its own frame now and
+    // `coverSecond` is the fallback under it. two places appending
+    // `cover_timestamp` would be two answers to one question.
     // a draft carries no metadata at all on tiktok's side, so sending the rest
     // above is harmless but pointless. their inbox is where it gets written.
     form.append("post_mode", t.draft ? "MEDIA_UPLOAD" : "DIRECT_POST");
@@ -435,6 +442,22 @@ function appendOptions(
     );
     form.append("video_state", fb.draft ? "DRAFT" : "PUBLISHED");
   }
+}
+
+/**
+ * The cover frame, on the two platforms that take one. `coverOffsets` is the
+ * whole rule. a clip with no cover picked sends exactly what this file sent
+ * before a cover could be picked.
+ */
+function appendCover(
+  form: FormData,
+  platforms: AutopostPlatform[],
+  options: PostOptions | null,
+  coverMs: number | null
+): void {
+  const at = coverOffsets({ coverMs, platforms, options });
+  if (at.tiktok !== null) form.append("cover_timestamp", String(at.tiktok));
+  if (at.instagram !== null) form.append("thumb_offset", String(at.instagram));
 }
 
 /* ------------------------------------------------------------------- status */
