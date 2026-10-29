@@ -541,7 +541,7 @@ export function AutopostCalendar({
                               onMenu(p, e.clientX, e.clientY);
                             }}
                             onClick={() => onCardClick(p)}
-                            title={[p.videoName, p.caption].filter(Boolean).join(" — ") || undefined}
+                            title={[p.videoName, p.caption, p.outcome].filter(Boolean).join("\n") || undefined}
                             className={`absolute flex touch-none select-none items-center gap-1.5 overflow-hidden rounded-lg border border-l-[3px] p-1 text-left shadow-card transition-opacity ${t.box} ${t.rail} ${
                               live ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                             } ${drag?.active && drag.id === p.id ? "opacity-35" : ""}`}
@@ -655,7 +655,7 @@ export function AutopostCalendar({
                               onMenu(p, e.clientX, e.clientY);
                             }}
                             onClick={() => onCardClick(p)}
-                            title={[p.videoName, p.caption].filter(Boolean).join(" — ") || undefined}
+                            title={[p.videoName, p.caption, p.outcome].filter(Boolean).join("\n") || undefined}
                             className={`flex w-full touch-none select-none items-center gap-1.5 rounded-lg border-l-[3px] p-1 text-left transition-opacity ${t.cell} ${t.rail} ${
                               live ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
                             } ${drag?.active && drag.id === p.id ? "opacity-35" : ""}`}

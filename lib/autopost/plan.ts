@@ -421,6 +421,9 @@ export type ScheduledPost = {
   /** minutes from midnight, local */
   min: number;
   status: PostStatus;
+  /** why a failed or partial post did not fully go out, one platform a
+   *  line. null otherwise. */
+  outcome?: string | null;
 };
 
 /** A deal in the brand picker, with the dots that say what is connected. */

@@ -392,10 +392,17 @@ function patchFor(post: SocialPost, status: JobStatus): Patch | null {
   }
   if (s === "failed") {
     const results = resultsOf(status);
+    // upload-post marks a whole job failed when one platform of three timed
+    // out ("2 of 3 platforms finished"). the two that went out are live, so
+    // that is a partial post, never a failed one.
+    const anyLive = results.some((r) => r.success);
     return {
-      status: "failed",
+      status: anyLive ? "partial" : "failed",
       results,
-      error: results.find((r) => r.error)?.error ?? "the post failed upstream",
+      error:
+        results.find((r) => r.error)?.error ??
+        status.message ??
+        "the post failed upstream",
     };
   }
   // a scheduled row whose slot has passed is now processing on their side;
@@ -486,7 +493,8 @@ async function notifyOutcome(db: SupabaseClient, post: SocialPost): Promise<void
  */
 export async function reconcilePosts(
   db: SupabaseClient,
-  posts: SocialPost[]
+  posts: SocialPost[],
+  opts: { quietBefore?: number } = {}
 ): Promise<SocialPost[]> {
   const out: SocialPost[] = [];
 
@@ -521,6 +529,10 @@ export async function reconcilePosts(
       TERMINAL.includes(patch.status as SocialPost["status"]) &&
       !post.notified_at;
     if (announce) patch.notified_at = new Date().toISOString();
+    // a slot long gone is backlog being settled, not news: mark it told and
+    // send nothing, or the first run after a gap emails a month of posts.
+    const slot = Date.parse(post.scheduled_for ?? post.created_at);
+    const quiet = opts.quietBefore !== undefined && slot < opts.quietBefore;
 
     const { error } = await db.from("social_posts").update(patch).eq("id", post.id);
     const next = { ...post, ...patch } as SocialPost;
@@ -528,12 +540,65 @@ export async function reconcilePosts(
     // a write that did not land leaves the row untouched, so it is still
     // pending and the next load reconciles it again. emailing here would be
     // announcing a status nobody stored.
-    if (!error && announce) await notifyOutcome(db, next);
+    if (!error && announce && !quiet) await notifyOutcome(db, next);
 
     out.push(next);
   }
 
   return out;
+}
+
+/**
+ * Settle every post whose slot has passed and that still reads scheduled or
+ * processing. Upload-Post's own scheduler fires these; nothing told this table
+ * what happened unless somebody opened the old /social page, so the scheduler
+ * drew every post that already went out as an orange card stuck in the past,
+ * and every refused platform with it. Students read that as "it is not
+ * posting".
+ *
+ * Newest slot first, because the post somebody is looking for is the one that
+ * was due an hour ago, not the backlog. `lanes` status calls at once against a
+ * shared queue, and nothing new starts past `deadline`.
+ */
+export async function reconcileDuePosts(
+  db: SupabaseClient,
+  opts: { dealId?: string; limit: number; lanes?: number; deadline?: number }
+): Promise<{ checked: number; settled: number }> {
+  // a minute of grace: upload-post fires on the minute and answers a status
+  // call for a job it is still starting as pending anyway.
+  const due = new Date(Date.now() - 60_000).toISOString();
+  let query = db
+    .from("social_posts")
+    .select(POST_SELECT)
+    .in("status", ["scheduled", "processing"])
+    .lte("scheduled_for", due)
+    .order("scheduled_for", { ascending: false })
+    .limit(opts.limit);
+  if (opts.dealId) query = query.eq("deal_id", opts.dealId);
+
+  const { data, error } = await query;
+  if (error || !data) return { checked: 0, settled: 0 };
+
+  const queue = data as SocialPost[];
+  const quietBefore = Date.now() - 24 * 60 * 60 * 1000;
+  let cursor = 0;
+  let checked = 0;
+  let settled = 0;
+
+  async function lane() {
+    while (cursor < queue.length) {
+      if (opts.deadline && Date.now() > opts.deadline) return;
+      const post = queue[cursor++];
+      checked += 1;
+      const [next] = await reconcilePosts(db, [post], { quietBefore }).catch(() => [post]);
+      if (next.status !== post.status) settled += 1;
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(opts.lanes ?? 4, queue.length) }, () => lane())
+  );
+  return { checked, settled };
 }
 
 /**

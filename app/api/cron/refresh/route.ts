@@ -3,6 +3,7 @@ import { notificationHtml, sendEmail } from "@/lib/email/send";
 import { dueAccounts, syncAccount, type SyncResult } from "@/lib/ingest/sync";
 import { latestBalance } from "@/lib/scrape/usage";
 import { createServiceClient } from "@/lib/supabase/service";
+import { reconcileDuePosts } from "@/lib/autopost/server";
 
 /**
  * The pull. One run takes the accounts whose own `next_sync_at` has come round,
@@ -68,6 +69,17 @@ export async function GET(request: Request) {
   // the narrowing that proved `db` is not null.
   const client = db;
   const startedAt = Date.now();
+
+  // settle the autoposts that already fired. upload-post's scheduler sends
+  // them; without this pass nothing records whether they went out, so the
+  // scheduler shows every one as still waiting. a minute of the budget, never
+  // more, so the sync behind it still gets its four.
+  const posts = await reconcileDuePosts(client, {
+    limit: 400,
+    lanes: 6,
+    deadline: startedAt + 60_000,
+  }).catch(() => ({ checked: 0, settled: 0 }));
+
   const balanceBefore = await latestBalance();
   const queue = await dueAccounts(client, MAX_ACCOUNTS);
 
@@ -128,6 +140,8 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     ms: Date.now() - startedAt,
+    posts_checked: posts.checked,
+    posts_settled: posts.settled,
     accounts_due: queue.length,
     accounts_synced: results.length,
     /** what the provider said was left on the last call of this run. */

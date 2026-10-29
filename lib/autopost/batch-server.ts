@@ -23,7 +23,7 @@ import { hasApiKey } from "@/lib/api-keys";
 import { PLATFORMS, type Platform } from "@/lib/deals";
 import { BUCKET, PLAYABLE, STORAGE_URL_PREFIX, isStorageUrl } from "@/lib/editing-files";
 import { brandLogo } from "@/lib/brand-catalog";
-import { loadConnections } from "@/lib/autopost/server";
+import { loadConnections, reconcileDuePosts } from "@/lib/autopost/server";
 import {
   DEFAULT_OPTIONS,
   withDefaults,
@@ -168,7 +168,17 @@ export const loadAutopostWorkspace = cache(
         lastCheckedAt: null,
         configured,
       })),
-      loadDealPosts(supabase, dealId),
+      // settle what already fired before reading the calendar, or every post
+      // that went out stays an orange card in the past. capped and timed so a
+      // backlog costs one slow load at most; the hourly cron clears the rest.
+      reconcileDuePosts(supabase, {
+        dealId,
+        limit: 20,
+        lanes: 5,
+        deadline: Date.now() + 6_000,
+      })
+        .catch(() => null)
+        .then(() => loadDealPosts(supabase, dealId)),
       loadDealClips(supabase, dealId),
       loadVariationClips(supabase, deals.find((d) => d.id === dealId)?.brand_id ?? null),
       supabase
@@ -203,6 +213,29 @@ export const loadAutopostWorkspace = cache(
   }
 );
 
+/**
+ * Why a post did not fully go out, one platform at a time, so a red card can
+ * say "facebook: reconnect" rather than just being red. Null on anything that
+ * is not failed or partial.
+ */
+function outcomeOf(row: {
+  status: PostStatus;
+  platforms: string[];
+  results: { platform: string; success: boolean; error: string | null }[] | null;
+  error: string | null;
+}): string | null {
+  if (row.status !== "failed" && row.status !== "partial") return null;
+  const results = row.results ?? [];
+  const lines = row.platforms
+    .filter((p) => !results.some((r) => r.platform === p && r.success))
+    .map((p) => {
+      const r = results.find((x) => x.platform === p);
+      const why = (r?.error ?? "did not finish in time").split(". ")[0].slice(0, 140);
+      return `${p}: ${why}`;
+    });
+  return lines.length ? lines.join("\n") : row.error;
+}
+
 /** Everything scheduled or already out for one deal, split back into wall clock. */
 async function loadDealPosts(
   supabase: Awaited<ReturnType<typeof createClient>>,
@@ -212,7 +245,7 @@ async function loadDealPosts(
   const { data } = await supabase
     .from("social_posts")
     .select(
-      "id, deal_id, batch_id, caption, hashtags, platforms, video_name, video_url, source_ref, scheduled_for, created_at, status"
+      "id, deal_id, batch_id, caption, hashtags, platforms, video_name, video_url, source_ref, scheduled_for, created_at, status, results, error"
     )
     .eq("deal_id", dealId)
     .order("scheduled_for", { ascending: true, nullsFirst: false })
@@ -231,6 +264,8 @@ async function loadDealPosts(
     scheduled_for: string | null;
     created_at: string;
     status: PostStatus;
+    results: { platform: string; success: boolean; error: string | null }[] | null;
+    error: string | null;
   }[];
 
   // posters, re-signed now rather than trusted from the row. an editor's cut is
@@ -278,6 +313,7 @@ async function loadDealPosts(
       day,
       min,
       status: row.status,
+      outcome: outcomeOf(row),
     };
   });
 }

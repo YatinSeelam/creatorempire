@@ -468,6 +468,8 @@ export type JobStatus = {
    *  their status endpoint has momentarily lost is not a failed post, so
    *  callers must never auto-fail on it. */
   status?: string;
+  /** why a job failed as a whole, e.g. "2 of 3 platforms finished". */
+  message?: string;
   results?: {
     platform?: string;
     success?: boolean;
