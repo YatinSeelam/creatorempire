@@ -24,6 +24,7 @@ import { PLATFORMS, type Platform } from "@/lib/deals";
 import { BUCKET, PLAYABLE, STORAGE_URL_PREFIX, isStorageUrl } from "@/lib/editing-files";
 import { brandLogo } from "@/lib/brand-catalog";
 import { loadConnections, reconcileDuePosts } from "@/lib/autopost/server";
+import { resolveCheckingPosts } from "@/lib/autopost/landed-server";
 import {
   DEFAULT_OPTIONS,
   withDefaults,
@@ -171,14 +172,17 @@ export const loadAutopostWorkspace = cache(
       // settle what already fired before reading the calendar, or every post
       // that went out stays an orange card in the past. capped and timed so a
       // backlog costs one slow load at most; the hourly cron clears the rest.
-      reconcileDuePosts(supabase, {
-        dealId,
-        limit: 20,
-        lanes: 5,
-        deadline: Date.now() + 6_000,
-      })
-        .catch(() => null)
-        .then(() => loadDealPosts(supabase, dealId)),
+      // and a post whose publish timed out is looked for by file first, so a
+      // booking that landed turns into its real card on this load.
+      Promise.all([
+        reconcileDuePosts(supabase, {
+          dealId,
+          limit: 20,
+          lanes: 5,
+          deadline: Date.now() + 6_000,
+        }).catch(() => null),
+        resolveCheckingPosts(supabase, { userId: user.id, limit: 50 }).catch(() => null),
+      ]).then(() => loadDealPosts(supabase, dealId)),
       loadDealClips(supabase, dealId),
       loadVariationClips(supabase, deals.find((d) => d.id === dealId)?.brand_id ?? null),
       supabase

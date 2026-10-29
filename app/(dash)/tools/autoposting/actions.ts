@@ -17,9 +17,12 @@ import {
   rowFromPublish,
 } from "@/lib/autopost/server";
 import { autopostPrefix } from "@/lib/autopost/source";
+import { CHECKING_ERROR, CHECKING_REFUSAL, isChecking } from "@/lib/autopost/landed";
+import { findLandedJob } from "@/lib/autopost/landed-server";
 import { VARIATIONS_BUCKET, VARIATIONS_URL_PREFIX } from "@/lib/variations/model";
 import {
   AUTOPOST_PLATFORMS,
+  TIMEOUT_CODE,
   UploadPostError,
   cancelScheduledJob,
   editScheduledJob,
@@ -66,6 +69,18 @@ async function authed() {
 const MIN_LEAD_MS = 60_000;
 const NOW_WINDOW_MS = 2 * 60_000;
 const PAST_GRACE_MS = 60 * 60_000;
+
+/** How long one batch may spend sending, inside the page's `maxDuration` of
+ *  300s with room to answer. */
+const BATCH_BUDGET_MS = 270_000;
+/** How many clips go to upload-post at once. */
+const SEND_LANES = 4;
+/** What a publish leaves of the budget for looking up a booking that did not
+ *  answer (40s of looks) and writing the row. */
+const LANDED_ROOM_MS = 50_000;
+/** A clip is not started with less than this left: the shortest publish wait
+ *  (45s) plus the room above. */
+const MIN_SEND_ROOM_MS = 95_000;
 
 /** How long a cut's signed url has to outlive the moment it is minted.
  *
@@ -183,80 +198,168 @@ export async function scheduleBatch(input: BatchInput): Promise<BatchState> {
   const batchId = crypto.randomUUID();
   let done = 0;
 
+  // EVERY CLIP IS CHECKED BEFORE ANY IS SENT, so a bad time on clip nine is
+  // a refusal with nothing gone out rather than eight posts and a stop.
+  type Ready = {
+    post: (typeof posts)[number];
+    caption: string;
+    when: Date;
+    immediate: boolean;
+    video: { url: string };
+    coverMs: number | null;
+  };
+  const ready: Ready[] = [];
   for (const post of posts) {
     const caption = String(post.caption ?? "").trim().slice(0, MAX_CAPTION);
     const when = instantOf(String(post.day), Number(post.min), tz);
     if (Number.isNaN(when.getTime())) {
-      return stopHere(done, "one of the times did not read. check the schedule step.");
+      return stopHere(0, "one of the times did not read. check the schedule step.");
     }
     const lead = when.getTime() - Date.now();
     if (lead < -PAST_GRACE_MS) {
-      return stopHere(done, "that time has already gone. pick a new one on the schedule step.");
+      return stopHere(0, "that time has already gone. pick a new one on the schedule step.");
     }
     // "now" is the absence of a scheduled_date, not a scheduled_date of now.
     const immediate = lead <= NOW_WINDOW_MS;
     if (!immediate && lead < MIN_LEAD_MS) {
-      return stopHere(done, "that is too soon to schedule. leave a minute, or set it to now.");
+      return stopHere(0, "that is too soon to schedule. leave a minute, or set it to now.");
     }
 
     const video = await publicVideoUrl(supabase, user.id, String(post.ref ?? ""));
-    if ("error" in video) return stopHere(done, video.error);
+    if ("error" in video) return stopHere(0, video.error);
 
     // re-read, never trusted: the browser's number is a claim. it rides the
     // row's own options jsonb so a restore sends the same frame.
-    const coverMs = readCoverMs(post.coverMs);
+    ready.push({ post, caption, when, immediate, video, coverMs: readCoverMs(post.coverMs) });
+  }
 
+  // FOUR AT A TIME, INSIDE THE ACTION'S OWN CEILING (2026-10-29). One at a
+  // time, a batch of thirteen at upload-post's current pace is ten minutes,
+  // and the action dies at five holding the rest unsent: "the autoposter isn't
+  // posting the videos anymore". A clip that cannot start with room left is
+  // not sent and is named, never half sent.
+  const deadline = Date.now() + BATCH_BUDGET_MS;
+  const notSent: string[] = [];
+  const failures: string[] = [];
+  let checking = 0;
+  let cursor = 0;
+
+  const insertRow = async (r: Ready, row: Record<string, unknown>, bornTerminal: boolean) => {
+    const { error } = await supabase.from("social_posts").insert({
+      user_id: user.id,
+      deal_id: dealId,
+      batch_id: batchId,
+      caption: r.caption,
+      hashtags,
+      platforms,
+      options: r.coverMs === null ? options : { ...options, coverMs: r.coverMs },
+      video_url: r.video.url,
+      video_name: String(r.post.name ?? "").slice(0, 200) || null,
+      // the column's check constraint is ('editor', 'upload') and a rendered
+      // variation is neither, so it is recorded as "came out of the product".
+      source_kind: r.post.source === "upload" ? "upload" : "editor",
+      source_ref: String(r.post.ref ?? "").slice(0, 400) || null,
+      // what actually happened, not what the form said: a post sent now is
+      // recorded as now, so the queue does not show it as still to come.
+      scheduled_for: (r.immediate ? new Date() : r.when).toISOString(),
+      notified_at: bornTerminal ? new Date().toISOString() : null,
+      ...row,
+    });
+    return !error;
+  };
+
+  const sendOne = async (r: Ready) => {
     let result;
     try {
       result = await publishVideo({
         key: postKey,
         username: profile.upload_post_username,
         platforms,
-        caption,
-        videoUrl: video.url,
-        scheduledDate: immediate ? undefined : when.toISOString(),
+        caption: r.caption,
+        videoUrl: r.video.url,
+        scheduledDate: r.immediate ? undefined : r.when.toISOString(),
         facebookPageId: profile.facebook_page_id,
         options,
-        coverMs,
+        coverMs: r.coverMs,
+        // as long as the ceiling allows, leaving room to look for the booking
+        timeoutMs: deadline - Date.now() - LANDED_ROOM_MS,
       });
     } catch (err) {
-      return stopHere(
-        done,
-        err instanceof UploadPostError ? err.message : "posting failed before it started."
+      const timedOut = err instanceof UploadPostError && err.code === TIMEOUT_CODE;
+      if (!timedOut) {
+        failures.push(err instanceof UploadPostError ? err.message : "posting failed before it started.");
+        return;
+      }
+      // A PUBLISH THAT DID NOT ANSWER MAY HAVE BOOKED (lib/autopost/landed.ts).
+      // Looked for by the file it sent, and if it is not there yet, written as
+      // a row that says it is being checked, so the card never vanishes and
+      // nobody schedules it a second time.
+      const job = r.immediate
+        ? null
+        : await findLandedJob(supabase, {
+            username: profile.upload_post_username,
+            scheduledIso: r.when.toISOString(),
+            caption: r.caption,
+            videoUrl: r.video.url,
+            key: postKey,
+            until: deadline,
+          });
+      const saved = await insertRow(
+        r,
+        job
+          ? { status: "scheduled", job_id: job, request_id: null, results: [] }
+          : r.immediate
+            ? {
+                status: "failed",
+                job_id: null,
+                request_id: null,
+                results: [],
+                error: "upload-post did not answer in time, so it may or may not have gone out. check the account before sending it again.",
+              }
+            : { status: "scheduled", job_id: null, request_id: null, results: [], error: CHECKING_ERROR },
+        r.immediate
       );
+      if (!saved) failures.push("it may have gone out, but saving the record failed. reload the page.");
+      else if (job) done += 1;
+      else if (!r.immediate) checking += 1;
+      else failures.push("one did not answer in time. check the account before sending it again.");
+      return;
     }
 
     const row = rowFromPublish(result, platforms.length);
     const bornTerminal = row.status !== "scheduled" && row.status !== "processing";
+    if (await insertRow(r, row, bornTerminal)) done += 1;
+    else failures.push("it went out, but saving the record failed. reload the page.");
+  };
 
-    const { error } = await supabase.from("social_posts").insert({
-      user_id: user.id,
-      deal_id: dealId,
-      batch_id: batchId,
-      caption,
-      hashtags,
-      platforms,
-      options: coverMs === null ? options : { ...options, coverMs },
-      video_url: video.url,
-      video_name: String(post.name ?? "").slice(0, 200) || null,
-      // the column's check constraint is ('editor', 'upload') and a rendered
-      // variation is neither — but the question this records is "did the
-      // creator hand us this file, or did it come out of the product", and a
-      // variation is the second. widening the constraint for a third word
-      // nothing branches on would be a migration for a label.
-      source_kind: post.source === "upload" ? "upload" : "editor",
-      source_ref: String(post.ref ?? "").slice(0, 400) || null,
-      // what actually happened, not what the form said: a post sent now is
-      // recorded as now, so the queue does not show it as still to come.
-      scheduled_for: (immediate ? new Date() : when).toISOString(),
-      notified_at: bornTerminal ? new Date().toISOString() : null,
-      ...row,
-    });
-    if (error) {
-      return stopHere(done, "it went out, but saving the record failed. reload the page.");
+  const lane = async () => {
+    while (cursor < ready.length) {
+      const r = ready[cursor++];
+      // no room left to wait on upload-post and write it down: not sent.
+      if (Date.now() > deadline - MIN_SEND_ROOM_MS) {
+        notSent.push(String(r.post.name ?? "a clip"));
+        continue;
+      }
+      await sendOne(r);
     }
+  };
+  await Promise.all(Array.from({ length: Math.min(SEND_LANES, ready.length) }, () => lane()));
 
-    done += 1;
+  if (failures.length > 0 || notSent.length > 0 || checking > 0) {
+    revalidateAll(dealId);
+    const parts = [
+      checking > 0
+        ? `${checking} being checked with upload-post (they show on the calendar, do not schedule them again)`
+        : "",
+      notSent.length > 0
+        ? `${notSent.length} not sent, ran out of time. schedule ${notSent.length === 1 ? "it" : "them"} again`
+        : "",
+      failures.length > 0 ? failures[0] : "",
+    ].filter(Boolean);
+    return {
+      error: `${done} post${done === 1 ? "" : "s"} scheduled. ${parts.join(". ")}.`,
+      scheduled: done,
+    };
   }
 
   revalidateAll(dealId);
@@ -354,11 +457,14 @@ export async function movePost(
 
   const { data: post } = await supabase
     .from("social_posts")
-    .select("id, deal_id, job_id, status, scheduled_for")
+    .select("id, deal_id, job_id, status, scheduled_for, error")
     .eq("id", postId)
     .maybeSingle();
   if (!post) return { error: "that post is gone." };
   if (post.status !== "scheduled") return { error: "that one has already gone out." };
+  // its booking may exist upstream with no job id here yet: moving the row
+  // alone would leave the post firing at the old time.
+  if (isChecking(post)) return { error: CHECKING_REFUSAL };
 
   // month view drags carry no time: keep the minute it already had, read in
   // the creator's own zone so the post stays at "9am" and not at 9am utc.
@@ -409,10 +515,12 @@ export async function dropPost(postId: string): Promise<BatchState> {
 
   const { data: post } = await supabase
     .from("social_posts")
-    .select("id, deal_id, job_id, status")
+    .select("id, deal_id, job_id, status, error")
     .eq("id", postId)
     .maybeSingle();
   if (!post) return { error: "that post is gone." };
+  // nothing here can cancel a booking it has no id for yet.
+  if (isChecking(post)) return { error: CHECKING_REFUSAL };
 
   const live = post.status === "scheduled" || post.status === "processing";
 
@@ -612,10 +720,12 @@ export async function deletePost(postId: string): Promise<BatchState> {
 
   const { data: post } = await supabase
     .from("social_posts")
-    .select("id, deal_id, job_id, status")
+    .select("id, deal_id, job_id, status, error")
     .eq("id", postId)
     .maybeSingle();
   if (!post) return { error: "that post is gone." };
+  // deleting the only record of a booking that may still fire: refused.
+  if (isChecking(post)) return { error: CHECKING_REFUSAL };
 
   const status = String(post.status ?? "");
   const live = status === "scheduled" || status === "processing";

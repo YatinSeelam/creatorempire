@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/refresh",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/autopost",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

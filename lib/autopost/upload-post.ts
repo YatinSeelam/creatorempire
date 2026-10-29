@@ -37,12 +37,19 @@ export type AutopostPlatform = (typeof AUTOPOST_PLATFORMS)[number];
 
 export class UploadPostError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  /** `TIMEOUT_CODE` on a request that went out and never answered. */
+  code: string | null;
+  constructor(message: string, status: number, code: string | null = null) {
     super(message);
     this.name = "UploadPostError";
     this.status = status;
+    this.code = code;
   }
 }
+
+/** `code` on an UploadPostError for a request that went out and never
+ *  answered. A WRITE carrying it may have landed. */
+export const TIMEOUT_CODE = "TIMEOUT";
 
 // social_accounts values are messy per the spec: a details object, a bare
 // string, or null — anything non-empty means "connected".
@@ -80,6 +87,10 @@ function messageOf(body: unknown): string | null {
  */
 const TIMEOUT_MS = 20_000;
 const UPLOAD_TIMEOUT_MS = 45_000;
+/** The longest a publish may wait when the caller has the time. Upload-Post
+ *  fetches the clip before it answers, and from 2026-10-28 that ran past 45s
+ *  on ordinary clips. see lib/autopost/landed.ts. */
+export const UPLOAD_TIMEOUT_MAX_MS = 90_000;
 
 /**
  * `apiKey` is handed in by the caller now rather than read off the env here.
@@ -115,11 +126,18 @@ async function api<T>(
     const timedOut =
       err instanceof DOMException &&
       (err.name === "TimeoutError" || err.name === "AbortError");
+    // a read that timed out changed nothing. a WRITE that timed out reached
+    // them and we never heard the answer, so "nothing was posted" was a lie:
+    // students tried again and the first booking went out anyway.
+    const write = (init.method ?? "GET").toUpperCase() !== "GET";
     throw new UploadPostError(
       timedOut
-        ? "Upload-Post did not answer in time. Nothing was posted. Try again."
+        ? write
+          ? "Upload-Post did not answer in time, so it may or may not have gone through. Check the calendar before sending it again."
+          : "Upload-Post did not answer in time. Nothing changed. Try again."
         : `Could not reach Upload-Post: ${(err as Error).message}`,
-      504
+      504,
+      timedOut ? TIMEOUT_CODE : null
     );
   }
 
@@ -325,6 +343,8 @@ export function publishVideo(input: {
    *  null means nobody picked one: tiktok falls back to the batch's
    *  `coverSecond` and instagram is sent nothing. see lib/autopost/cover.ts. */
   coverMs?: number | null;
+  /** how long the caller can afford to wait, clamped to 45s..90s. */
+  timeoutMs?: number | null;
 }): Promise<PublishResult> {
   const form = new FormData();
   form.append("user", input.username);
@@ -345,10 +365,14 @@ export function publishVideo(input: {
   appendCover(form, input.platforms, input.options ?? null, input.coverMs ?? null);
 
   form.append("video", input.videoUrl);
+  const wait =
+    typeof input.timeoutMs === "number" && Number.isFinite(input.timeoutMs)
+      ? Math.min(UPLOAD_TIMEOUT_MAX_MS, Math.max(UPLOAD_TIMEOUT_MS, input.timeoutMs))
+      : UPLOAD_TIMEOUT_MS;
   return api<PublishResult>(
     "/upload",
     { method: "POST", body: form },
-    UPLOAD_TIMEOUT_MS,
+    wait,
     input.key
   );
 }
@@ -565,4 +589,41 @@ export async function cancelScheduledJob(
     if (err instanceof UploadPostError && err.status === 404) return false;
     throw err;
   }
+}
+
+/* ---------------------------------------------------------- the schedule list */
+
+export type ScheduledJob = {
+  job_id?: string;
+  profile_username?: string;
+  /** their wall clock, no zone. `original_scheduled_str` carries the Z. */
+  scheduled_date?: string;
+  original_scheduled_str?: string | null;
+  title?: string;
+  platforms?: string[];
+  /** the basename of the video url the job was booked with. */
+  source_filename?: string | null;
+};
+
+/** 50 pages of 100: ten times what the account holds. Past it is a loop. */
+const LIST_PAGES_MAX = 50;
+
+/** GET /uploadposts/schedule, every page: every job their scheduler holds. */
+export async function listScheduledJobs(key?: string | null): Promise<ScheduledJob[]> {
+  const seen = new Map<string, ScheduledJob>();
+  let offset = 0;
+  for (let page = 0; page < LIST_PAGES_MAX; page++) {
+    const body = await api<{ scheduled_posts?: ScheduledJob[]; total?: number }>(
+      `/uploadposts/schedule?limit=100&offset=${offset}`,
+      {},
+      TIMEOUT_MS,
+      key
+    );
+    const rows = Array.isArray(body?.scheduled_posts) ? body.scheduled_posts : [];
+    for (const r of rows) if (r && typeof r.job_id === "string" && r.job_id) seen.set(r.job_id, r);
+    const total = typeof body?.total === "number" ? body.total : null;
+    offset += rows.length;
+    if (rows.length === 0 || total === null || offset >= total) break;
+  }
+  return [...seen.values()];
 }
