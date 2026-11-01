@@ -92,6 +92,164 @@ export function ConnectButton({
         {busy ? "Opening" : (label ?? (manage ? "Manage connections" : "Connect accounts"))}
       </button>
       {error && <p className="text-[12px] font-semibold text-flame-dark">{error}</p>}
+      <DifferentAccount dealId={dealId} origin={origin} />
     </div>
+  );
+}
+
+/**
+ * The way to connect an account OTHER than the one the browser is signed into.
+ *
+ * Reported by students as "it auto connects to a previous account, or picks one
+ * for me, and never lets me choose". Nothing on our side picks: every deal has
+ * its own Upload-Post profile and nothing is shared between them. What is shared
+ * is the browser. Upload-Post's connect page hands off to the platform's own
+ * login, and TikTok and Instagram silently approve as whoever is already signed
+ * in there, so the second brand lands on the first brand's account without a
+ * screen ever asking. No parameter on their connect page forces a fresh login.
+ *
+ * So the fix is a link that can be opened somewhere signed into nothing: a
+ * private window. The platform then has to ask who you are. The link is minted
+ * on the press (good for about two days) and copied, never opened here, since
+ * opening it here is exactly the signed-in tab that caused the problem.
+ */
+export function DifferentAccount({
+  dealId,
+  origin = "social",
+}: {
+  dealId: string;
+  origin?: ConnectOrigin;
+}) {
+  const [shown, setShown] = useState(false);
+  const [state, setState] = useState<"idle" | "busy" | "ready" | "error">("idle");
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const mint = async () => {
+    if (state === "busy") return;
+    setState("busy");
+    setError("");
+    try {
+      const result = await connectLink(dealId, origin);
+      if ("error" in result) {
+        setError(result.error);
+        setState("error");
+        return;
+      }
+      setUrl(result.url);
+      setState("ready");
+    } catch {
+      setError("Could not make a link right now. Try again.");
+      setState("error");
+    }
+  };
+
+  // the write is the first thing the handler does, nothing awaited before it:
+  // safari only allows a clipboard write inside the gesture that asked for it.
+  const copy = () => {
+    navigator.clipboard?.writeText(url).then(
+      () => {
+        setCopied(true);
+        window.setTimeout(() => setCopied(false), 2000);
+      },
+      () => setCopied(false)
+    );
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setShown(true)}
+        className="text-[12px] font-semibold text-ink-50 underline-offset-2 hover:text-ink hover:underline"
+      >
+        Use a different account?
+      </button>
+
+      {shown && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Connect a different account"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setShown(false)}
+        >
+          <div
+            className="w-full max-w-[460px] rounded-2xl border border-line bg-paper p-6 text-left shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h2 className="text-[17px] font-bold text-ink">Connect a different account</h2>
+              <button
+                type="button"
+                onClick={() => setShown(false)}
+                aria-label="Close"
+                className="-mr-1 -mt-1 rounded-lg px-2 py-1 text-[18px] leading-none text-ink-50 hover:bg-shell hover:text-ink"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="mt-3 text-[13.5px] leading-[1.55] text-ink-70">
+              Each deal has its own accounts, so nothing carries over between them. What carries
+              over is your browser: TikTok and Instagram log you in as whoever is already signed
+              in and often skip the screen that asks.
+            </p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-[13.5px] leading-[1.55] text-ink-70">
+              <li>Get the link below and copy it.</li>
+              <li>
+                Open a <span className="font-semibold text-ink">private or incognito window</span>{" "}
+                and paste it there.
+              </li>
+              <li>Log in as the account you want for this deal.</li>
+              <li>Come back here and refresh. Check the handle that shows up.</li>
+            </ol>
+            <p className="mt-3 text-[13px] leading-[1.55] text-ink-50">
+              On Facebook you can also press &ldquo;Log in to another account&rdquo; on their screen.
+              On a phone, sign out of the app first.
+            </p>
+
+            <div className="mt-5">
+              {state !== "ready" ? (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={mint}
+                    disabled={state === "busy"}
+                    className="h-9 rounded-lg bg-flame px-4 text-[13px] font-semibold text-on-accent transition-colors hover:bg-flame-dark disabled:opacity-60"
+                  >
+                    {state === "busy" ? "Making a link" : "Get a connect link"}
+                  </button>
+                  {error && <p className="text-[12px] font-semibold text-flame-dark">{error}</p>}
+                </div>
+              ) : (
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      readOnly
+                      value={url}
+                      onFocus={(e) => e.currentTarget.select()}
+                      aria-label="Connect link"
+                      className="h-9 min-w-0 flex-1 rounded-lg border border-line bg-shell px-3 text-[12.5px] text-ink-70 focus:border-flame focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={copy}
+                      className="h-9 shrink-0 rounded-lg bg-flame px-4 text-[13px] font-semibold text-on-accent transition-colors hover:bg-flame-dark"
+                    >
+                      {copied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                  <p className="text-[12px] text-ink-50">
+                    Good for about two days. Paste it into a private window.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
